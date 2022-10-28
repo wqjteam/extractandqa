@@ -9,7 +9,7 @@ from ICHscrapy.ICHscrapy.items import IchscrapyItem
 class ICHspider(scrapy.Spider):
     name = "kk_data_sources"
     allowed_domains = ["www.ihchina.cn"]
-    start_urls = ['https://www.ihchina.cn/directory_list.html#target1']
+    start_urls = ['https://www.ihchina.cn/project.html#target1']
 
     def start_requests(self):
         yield scrapy.Request(url=ICHspider.start_urls[0], callback=self.parse, meta={'chrome_flag': 1},
