@@ -3,11 +3,11 @@ import time
 
 import scrapy
 import pymysql
-from ICHscrapy.ICHscrapy.items import IchscrapyItem
+from ICHscrapy.items import IchscrapyItem
 
 
 class ICHspider(scrapy.Spider):
-    name = "kk_data_sources"
+    name = "ich_data_sources"
     allowed_domains = ["www.ihchina.cn"]
     start_urls = ['https://www.ihchina.cn/project.html#target1']
 
@@ -62,19 +62,20 @@ class ICHspider(scrapy.Spider):
             yield ich
 
     def __init__(self):
-        # 设置全局的重复url统计次数
-        self.repeat_url_number = 0;
-        # 建立连接
-        self.conn = pymysql.connect(host='115.159.151.166', user='root', passwd='buaaai123456', port=3306,
-                                    db='AIcourse')  # 有中文要存入数据库的话要加charset='utf8'
-        # 创建游标
-        self.cursor = self.conn.cursor()
-        select_sql = """
-                        select claw_url from  Economist
-                        """
-        self.cursor.execute(select_sql)
-        results = self.cursor.fetchall()
-        self.urlSet = set(str(url[0]).strip() for url in results)
-        # urlSet=set(hash(url[0]).strip for url in results)
-        self.cursor.close()
-        self.conn.close()
+        self.urlSet=()
+        # # 设置全局的重复url统计次数
+        # self.repeat_url_number = 0;
+        # # 建立连接
+        # self.conn = pymysql.connect(host='localhost', user='root', passwd='buaaai123456', port=3306,
+        #                             db='AIcourse')  # 有中文要存入数据库的话要加charset='utf8'
+        # # 创建游标
+        # self.cursor = self.conn.cursor()
+        # select_sql = """
+        #                 select claw_url from  Economist
+        #                 """
+        # self.cursor.execute(select_sql)
+        # results = self.cursor.fetchall()
+        # self.urlSet = set(str(url[0]).strip() for url in results)
+        # # urlSet=set(hash(url[0]).strip for url in results)
+        # self.cursor.close()
+        # self.conn.close()
