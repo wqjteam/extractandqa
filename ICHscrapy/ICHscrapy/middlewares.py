@@ -4,6 +4,11 @@
 # https://docs.scrapy.org/en/latest/topics/spider-middleware.html
 
 from scrapy import signals
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
+import requests
+import time
+import scrapy
 
 # useful for handling different item types with a single interface
 from itemadapter import is_item, ItemAdapter
@@ -78,7 +83,31 @@ class IchscrapyDownloaderMiddleware:
         # - or return a Request object
         # - or raise IgnoreRequest: process_exception() methods of
         #   installed downloader middleware will be called
-        return None
+        #return None
+        chrome_options = Options()
+        chrome_options.add_argument('--headless')  # 使用无头谷歌浏览器模式,不然一直弹
+        chrome_options.add_argument('--disable-gpu')
+        chrome_options.add_argument('--no-sandbox')
+        chrome_flag = request.meta.get('chrome_flag', 1)
+        # 指定谷歌浏览器路径(无需指定,已经在项目内部)
+        if chrome_flag == 1:
+            chrome_options.add_argument('--disable-javascript')
+            self.driver = webdriver.Chrome(chrome_options=chrome_options)
+            self.driver.get(request.url)
+            time.sleep(1)
+            # print(self.driver.title)
+            html = self.driver.page_source
+            self.driver.quit()
+            return scrapy.http.HtmlResponse(url=request.url, body=html.encode('utf-8'), encoding='utf-8',
+                                            request=request)
+        else:
+            # chrome_options.add_argument('--disable-javascript')
+            # chrome_options.add_argument('--disable-plugins')
+            # self.driver2 = webdriver.Chrome(chrome_options=chrome_options)
+            response = requests.get(request.url)
+            response.encoding = 'utf-8'
+            return scrapy.http.HtmlResponse(url=request.url, body=response.text, encoding='utf-8',
+                                            request=request)
 
     def process_response(self, request, response, spider):
         # Called with the response returned from the downloader.

@@ -17,7 +17,7 @@ class ICHspider(scrapy.Spider):
 
     def parse(self, response):
 
-        lis = response.xpath("//ul[@id='menu-list']/li")
+        lis = response.xpath("//div[@id='page']/ul/li[@id='down']")
         for li in lis:
             type = li.xpath("./h2/a[1]/span/text()").extract()[0].replace("[", "").replace("]", "")
             title = li.xpath("./h2/a[2]/text()").extract()[0]

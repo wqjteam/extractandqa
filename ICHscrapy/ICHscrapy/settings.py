@@ -53,6 +53,9 @@ ROBOTSTXT_OBEY = True
 #DOWNLOADER_MIDDLEWARES = {
 #    'ICHscrapy.middlewares.IchscrapyDownloaderMiddleware': 543,
 #}
+DOWNLOADER_MIDDLEWARES = {
+    'ICHscrapy.middlewares.IchscrapyDownloaderMiddleware': 543,
+}
 
 # Enable or disable extensions
 # See https://docs.scrapy.org/en/latest/topics/extensions.html
