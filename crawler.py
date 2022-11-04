@@ -7,6 +7,8 @@
  ?province=&rx_time=&type=&cate=&keywords=&category_id=16&limit=10&p=页数"""
 
 # 引用库
+import time
+
 import requests
 import json
 import csv
@@ -26,6 +28,7 @@ h = {
     "X-Requested-With": "XMLHttpRequest"
 }
 
+num_set=set()
 
 def get_info(num):
     # 空参数可以删掉
@@ -35,8 +38,11 @@ def get_info(num):
     # 当时解析json的时候导出了一下
     # with open('info362.json', 'w') as f:
     #     f.write(str(resp.json()))
-
-    JsonObj = json.loads(resp.text)
+    JsonObj=None
+    try:
+        JsonObj = json.loads(resp.text)
+    except TypeError as e:
+        print(e)
     try:
         count = len(JsonObj["list"])
     except TypeError as e:
@@ -65,13 +71,17 @@ def get_info(num):
         content = content.replace('&lt;br /&gt;\r\n\u3000\u3000', '')
         jsondict['content'] = content
 
-        # 写入文件中
-        json.dump(jsondict, f, ensure_ascii=False)
-        # json.dump(jsondict, f, ensure_ascii=False, indent=1)
-        #换行
-        f.write("\n")
-        # f.writelines()
-        # writer.writerow([name, gb_time, province, num, cate, content])
+
+        if num not in num_set and len(content) >=1:
+            # 写入文件中
+            time.sleep(1)
+            json.dump(jsondict, f, ensure_ascii=False)
+            # json.dump(jsondict, f, ensure_ascii=False, indent=1)
+            #换行
+            f.write("\n")
+            num_set.add(num)
+            # f.writelines()
+            # writer.writerow([name, gb_time, province, num, cate, content])
 
 
 if __name__ == '__main__':

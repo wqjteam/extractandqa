@@ -1,0 +1,1 @@
+#主要用于实体识别用，用来关联关联all_passages和question_train数据
