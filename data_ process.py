@@ -44,10 +44,10 @@ qa_json.loc[:, "keyword"] = qa_json.apply(getkeyowrd, axis=1)
 #   )
 
 
-engine = create_engine("mysql+pymysql://root:123456@192.168.4.110:3306/relic_data?charset=utf8")
+# engine = create_engine("mysql+pymysql://root:123456@192.168.4.110:3306/relic_data?charset=utf8")
 
-with engine.begin() as conn:
-    pass
+# with engine.begin() as conn:
+#     pass
     # 数据已经组织好，无需再次插入
     # qa_json.to_sql(name='qa', con=conn, if_exists='replace', index=False)
     #
@@ -66,36 +66,36 @@ def passagejoinqa(passage_json):
     for tup in zip(qa_json['q'], qa_json['a'], qa_json['keyword']):
         if tup[2] in passage_json['sentence']:
             json_dict = {}
-            json_dict["question"] = tup[0].strip()
-            json_dict["answer"] = tup[1].strip()
+            json_dict['question'] = tup[0].strip()
+            json_dict['answer'] = tup[1].strip()
             qaarray.append(json_dict)
             keyword.add(tup[2].strip())
     if len(qaarray) == 0 and passage_json['spos'] == passage_json['spos']  :
         # 对于匹配不上,且自己有spos字段的进行处理\
         for pjss in passage_json['spos']:
             json_dict = {}
-            json_dict["question"] = pjss.get("s").strip() + '的' + pjss.get("p").strip() + '?'
-            json_dict["answer"] = pjss.get("o").strip()
+            json_dict['question'] = pjss.get('s').strip() + '的' + pjss.get("p").strip() + '?'
+            json_dict['answer'] = pjss.get("o").strip()
             qaarray.append(json_dict)
             keyword.add(pjss.get("s").strip())
 
-    result= json.dumps(qaarray, ensure_ascii=False), keyword
+    result= qaarray, keyword
     return result
 
 
 passage_json[['q_a','keyword']]= passage_json.apply(passagejoinqa, axis=1,result_type='expand')
 
 # 写入数据库中
-with engine.begin() as conn:
-    pass
+# with engine.begin() as conn:
+#     pass
     # 数据已经组织好，无需再次插入
     # qa_json.to_sql(name='qa', con=conn, if_exists='replace', index=False)
     # 读取
 
     # passage_json.to_sql(name='passage_qa_keyword', con=conn, if_exists='replace', index=False)
-#passage_json.to_json('data/origin/intercontest/passage_qa_keyword.json', force_ascii=False,orient='records', lines=True)
-qa_json=pd.read_json("data/origin/intercontest/qa_keyword.json", orient='records', lines=True)
+passage_json.to_json('data/origin/intercontest/passage_qa_keyword.json', force_ascii=False,orient='records', lines=True)
+#qa_json=pd.read_json("data/origin/intercontest/qa_keyword.json", orient='records', lines=True)
 
 
 #passage_qa_keyword_json 是可以用于训练的
-passage_qa_keyword_json=pd.read_json("data/origin/intercontest/passage_qa_keyword.json", orient='records', lines=True)
+# passage_qa_keyword_json=pd.read_json("data/origin/intercontest/passage_qa_keyword.json", orient='records', lines=True)
