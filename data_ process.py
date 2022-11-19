@@ -1,3 +1,4 @@
+#encoding=utf-8
 # 由于数据格式不同，该类用于处理数据
 import json
 
@@ -93,9 +94,10 @@ passage_json[['q_a','keyword']]= passage_json.apply(passagejoinqa, axis=1,result
     # 读取
 
     # passage_json.to_sql(name='passage_qa_keyword', con=conn, if_exists='replace', index=False)
-passage_json.to_json('data/origin/intercontest/passage_qa_keyword.json', force_ascii=False,orient='records', lines=True)
+#passage_json.to_json('data/origin/intercontest/passage_qa_keyword.json', force_ascii=False,orient='records', lines=True)
 #qa_json=pd.read_json("data/origin/intercontest/qa_keyword.json", orient='records', lines=True)
 
 
 #passage_qa_keyword_json 是可以用于训练的
-# passage_qa_keyword_json=pd.read_json("data/origin/intercontest/passage_qa_keyword.json", orient='records', lines=True)
+passage_qa_keyword_json=pd.read_json("data/origin/intercontest/passage_qa_keyword.json", orient='records', lines=True)
+print(passage_qa_keyword_json.head())
