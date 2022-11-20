@@ -7,6 +7,7 @@ import pandas as pd
 import torch
 from torch import nn, optim
 from torch.utils import data
+from transformers import BertForSequenceClassification
 
 text = (
     'Hello, how are you? I am Romeo\\n'
@@ -161,6 +162,7 @@ class Embedding(nn.Module):
         embedding = self.tok_embed(x) + self.pos_embed(pos) + self.seg_embed(seg)
         return self.norm(embedding)
 
+# 用于q 相乘q 除以 根号dk 然后把结果乘以 v 求Z的
 class ScaledDotProductAttention(nn.Module):
     def __init__(self):
         super(ScaledDotProductAttention, self).__init__()
@@ -172,6 +174,11 @@ class ScaledDotProductAttention(nn.Module):
         context = torch.matmul(attn, V)
         return context
 
+
+aa=BertForSequenceClassification()
+
+
+#多头注意力机制
 class MultiHeadAttention(nn.Module):
     def __init__(self):
         super(MultiHeadAttention, self).__init__()
@@ -194,6 +201,7 @@ class MultiHeadAttention(nn.Module):
         output = nn.Linear(n_heads * d_v, d_model)(context)
         return nn.LayerNorm(d_model)(output + residual) # output: [batch_size, seq_len, d_model]
 
+#这里比较简单
 class PoswiseFeedForwardNet(nn.Module):
     def __init__(self):
         super(PoswiseFeedForwardNet, self).__init__()
@@ -240,6 +248,7 @@ class BERT(nn.Module):
             # output: [batch_size, max_len, d_model]
             output = layer(output, enc_self_attn_mask)
         # it will be decided by first token(CLS)
+        #处理全连接
         h_pooled = self.fc(output[:, 0]) # [batch_size, d_model]
         logits_clsf = self.classifier(h_pooled) # [batch_size, 2] predict isNext
 
