@@ -17,7 +17,7 @@ text = (
     'Thanks you Romeo'
 )
 
-passage_keyword_json = pd.read_json("data/origin/intercontest/passage_qa_keyword.json", orient='records', lines=True)
+passage_keyword_json = pd.read_json("../data/origin/intercontest/passage_qa_keyword.json", orient='records', lines=True)
 keyword=""
 sentences = re.sub("[.,!?]", '', text.lower()).split('\\n')  # filter '.', ',', '?', '!'
 word_list = list(set(" ".join(sentences).split()))
@@ -72,8 +72,8 @@ def make_batch():
         shuffle(cand_maked_pos)
         masked_tokens, masked_pos = [], []
         for pos in cand_maked_pos[:n_pred]:
-            if pos in keyword:
-                pass
+            # if pos in keyword:
+            #     pass
             masked_pos.append(pos)
             masked_tokens.append(input_ids[pos])
             if random() < 0.8:  # 80%
@@ -87,12 +87,14 @@ def make_batch():
         input_ids.extend([0] * n_pad)
         segment_ids.extend([0] * n_pad)
 
-        # Zero Padding (100% - 15%) tokens
+        # Zero Padding (100% - 15%) tokens,要保证所有训练数据的mask数量一致
         if max_pred > n_pred:
             n_pad = max_pred - n_pred
+            #0 指的是PAD 其他的几个分隔符也是可以的，这个没有意义，只是为了batch计算的时候，统一
             masked_tokens.extend([0] * n_pad)
             masked_pos.extend([0] * n_pad)
 
+        #后面的判断是为了 positive < batch_size / 2样本均衡
         if tokens_a_index + 1 == tokens_b_index and positive < batch_size / 2:
             batch.append([input_ids, segment_ids, masked_tokens, masked_pos, True])  # IsNext
             positive += 1
