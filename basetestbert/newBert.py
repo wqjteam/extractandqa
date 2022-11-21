@@ -175,7 +175,7 @@ class ScaledDotProductAttention(nn.Module):
         return context
 
 
-aa=BertForSequenceClassification()
+# aa=BertForSequenceClassification()
 
 
 #多头注意力机制
