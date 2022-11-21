@@ -7,7 +7,8 @@ import pandas as pd
 import torch
 from torch import nn, optim
 from torch.utils import data
-from transformers import BertForSequenceClassification
+from transformers import BertForQuestionAnswering
+from transformers import BertForNextSentencePrediction
 
 text = (
     'Hello, how are you? I am Romeo\\n'
