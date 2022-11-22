@@ -243,12 +243,39 @@ class BERT(nn.Module):
         self.fc2.weight = embed_weight
 
     def forward(self, input_ids, segment_ids, masked_pos):
-        output = self.embedding(input_ids, segment_ids) # [bach_size, seq_len, d_model]
+        outputs = self.embedding(input_ids, segment_ids) # [bach_size, seq_len, d_model]
         enc_self_attn_mask = get_attn_pad_mask(input_ids, input_ids) # [batch_size, maxlen, maxlen]
         for layer in self.layers:
             # output: [batch_size, max_len, d_model]
-            output = layer(output, enc_self_attn_mask)
+            #将上一层得 encoder得输出丢入下一层得encode中
+            outputs = layer(outputs, enc_self_attn_mask)
         # it will be decided by first token(CLS)
+        """
+        处理next sentence
+        """
+        pooled_output = outputs[1]
+
+        seq_relationship_scores = self.cls(pooled_output)
+
+        next_sentence_loss = None
+        if labels is not None:
+            loss_fct = CrossEntropyLoss()
+            next_sentence_loss = loss_fct(seq_relationship_scores.view(-1, 2), labels.view(-1))
+
+        if not return_dict:
+            output = (seq_relationship_scores,) + outputs[2:]
+            return ((next_sentence_loss,) + output) if next_sentence_loss is not None else output
+
+        return
+            loss=next_sentence_loss,
+            logits=seq_relationship_scores,
+            hidden_states=outputs.hidden_states,
+            attentions=outputs.attentions,
+
+        """
+        处理question_answer
+        """
+
         #处理全连接
         h_pooled = self.fc(output[:, 0]) # [batch_size, d_model]
         logits_clsf = self.classifier(h_pooled) # [batch_size, 2] predict isNext
