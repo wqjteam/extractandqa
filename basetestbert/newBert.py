@@ -242,6 +242,9 @@ class BERT(nn.Module):
         self.fc2 = nn.Linear(d_model, vocab_size, bias=False)
         self.fc2.weight = embed_weight
 
+        #qa部分使用
+        self.qa_outputs = nn.Linear(11, 2)
+
     def forward(self, input_ids, segment_ids, masked_pos):
         outputs = self.embedding(input_ids, segment_ids) # [bach_size, seq_len, d_model]
         enc_self_attn_mask = get_attn_pad_mask(input_ids, input_ids) # [batch_size, maxlen, maxlen]
@@ -259,29 +262,37 @@ class BERT(nn.Module):
 
         next_sentence_loss = None
         if labels is not None:
-            loss_fct = CrossEntropyLoss()
+
             next_sentence_loss = loss_fct(seq_relationship_scores.view(-1, 2), labels.view(-1))
 
-        if not return_dict:
-            output = (seq_relationship_scores,) + outputs[2:]
-            return ((next_sentence_loss,) + output) if next_sentence_loss is not None else output
+        # if not return_dict:
+        #     output = (seq_relationship_scores,) + outputs[2:]
+        #     return ((next_sentence_loss,) + output) if next_sentence_loss is not None else output
 
-        return
-            loss=next_sentence_loss,
-            logits=seq_relationship_scores,
-            hidden_states=outputs.hidden_states,
-            attentions=outputs.attentions,
+        # return
+        #     loss=next_sentence_loss,
+        #     logits=seq_relationship_scores,
+        #     hidden_states=outputs.hidden_states,
+        #     attentions=outputs.attentions,
 
         """
         处理question_answer
         """
 
+
+        sequence_output = outputs[0]
+
+        logits = self.qa_outputs(sequence_output)
+        start_logits, end_logits = logits.split(1, dim=-1)
+        start_logits = start_logits.squeeze(-1).contiguous()
+        end_logits = end_logits.squeeze(-1).contiguous()
+
         #处理全连接
-        h_pooled = self.fc(output[:, 0]) # [batch_size, d_model]
+        h_pooled = self.fc(outputs[:, 0]) # [batch_size, d_model]
         logits_clsf = self.classifier(h_pooled) # [batch_size, 2] predict isNext
 
         masked_pos = masked_pos[:, :, None].expand(-1, -1, d_model) # [batch_size, max_pred, d_model]
-        h_masked = torch.gather(output, 1, masked_pos) # masking position [batch_size, max_pred, d_model]
+        h_masked = torch.gather(outputs, 1, masked_pos) # masking position [batch_size, max_pred, d_model]
         h_masked = self.activ2(self.linear(h_masked)) # [batch_size, max_pred, d_model]
         logits_lm = self.fc2(h_masked) # [batch_size, max_pred, vocab_size]
         return logits_lm, logits_clsf
@@ -296,6 +307,7 @@ optimizer = optim.Adadelta(model.parameters(), lr=0.001)
 for epoch in range(180):
     for input_ids, segment_ids, masked_tokens, masked_pos, isNext in loader:
       logits_lm, logits_clsf = model(input_ids, segment_ids, masked_pos)
+
       loss_lm = criterion(logits_lm.view(-1, vocab_size), masked_tokens.view(-1)) # for masked LM
       loss_lm = (loss_lm.float()).mean()
       loss_clsf = criterion(logits_clsf, isNext) # for sentence classification
