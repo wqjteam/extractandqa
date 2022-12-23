@@ -60,7 +60,7 @@ class DataCollatorForLanguageModelingSpecial(DataCollatorMixin):
             batch = self.tokenizer.pad(examples, return_tensors="pt", pad_to_multiple_of=self.pad_to_multiple_of)
         else:
             batch = {
-                "input_ids": self._torch_collate_batch(examples, self.tokenizer, pad_to_multiple_of=self.pad_to_multiple_of)
+                "input_ids": _torch_collate_batch(examples, self.tokenizer, pad_to_multiple_of=self.pad_to_multiple_of)
             }
 
         # If special token mask has been preprocessed, pop it from the dict.
