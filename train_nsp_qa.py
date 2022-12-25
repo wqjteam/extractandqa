@@ -10,7 +10,7 @@ import transformers
 from transformers import PreTrainedTokenizerBase, AutoTokenizer, AutoModel
 from transformers.data.data_collator import _numpy_collate_batch, _torch_collate_batch, _tf_collate_batch, \
     DataCollatorMixin, DataCollatorForLanguageModeling
-
+from functools import partial
 # DataCollatorForLanguageModelingSpecial
 from DataCollatorForLanguageModelingSpecial import DataCollatorForLanguageModelingSpecial
 
@@ -64,11 +64,15 @@ def create_batch(data,tokenizer,data_collator):
         pad_to_max_length=True,
         return_attention_mask=True,  # 返回 attn. masks.
     )
+    input_ids = [torch.tensor(encoded_dict['input_ids'])]
+    output = data_collator(input_ids)
     return ('')
 
+#把一些参数固定
+create_batch_partial = partial(create_batch, tokenizer=tokenizer, data_collator=data_collator)
 
 train_dataloader = Data.DataLoader(
-    input_ids, shuffle=True, collate_fn=data_collator, batch_size=10
+    input_ids, shuffle=True, collate_fn=create_batch_partial, batch_size=10
 )
 
 for returndata in train_dataloader:
