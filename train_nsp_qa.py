@@ -30,9 +30,9 @@ data_collator = DataCollatorForLanguageModelingSpecial(tokenizer=tokenizer,
 '''
 获取数据
 '''
-passage_keyword_json = pd.read_json("../data/origin/intercontest/passage_qa_keyword.json", orient='records',
+passage_keyword_json = pd.read_json("./data/origin/intercontest/passage_qa_keyword.json", orient='records',
                                     lines=True).head(100).drop("spos", axis=1)
-passage_keyword_json = passage_keyword_json.explode("q_a")
+passage_keyword_json = passage_keyword_json.explode("q_a").values
 sent = "我爱北京天安门，天安门上太阳升"
 question = "我爱什么"
 # 创建一个实例，参数是tokenizer
@@ -47,17 +47,26 @@ encoded_dict = tokenizer.encode_plus(
 )
 
 print(encoded_dict)
-input_ids = [torch.tensor(encoded_dict['input_ids'])]
+# input_ids = [torch.tensor(encoded_dict['input_ids'])]
 # 传入的参数是tensor形式的input_ids，返回input_ids和label，label中
 # -100的位置的词没有被mask，
-output = data_collator(input_ids)
-print(output)
+# output = data_collator(input_ids)
+# print(output)
 
 
 def create_batch(data,tokenizer,data_collator):
+    text, question_answer,keyword = zip(*data)
+    questions=[q_a.get('question') for q_a in question_answer]
+    answers=[q_a.get('answer') for q_a in question_answer]
+
+
+
+    '''
+    bert是双向的encode 所以qestion和text放在前面和后面区别不大
+    '''
     encoded_dict = tokenizer.encode_plus(
-        sent,  # 输入文本
-        question,  #
+        questions,  # 输入文本
+        answers,  #
         add_special_tokens=True,  # 添加 '[CLS]' 和 '[SEP]'
         max_length=32,  # 填充 & 截断长度
         truncation=True,
@@ -72,7 +81,7 @@ def create_batch(data,tokenizer,data_collator):
 create_batch_partial = partial(create_batch, tokenizer=tokenizer, data_collator=data_collator)
 
 train_dataloader = Data.DataLoader(
-    input_ids, shuffle=True, collate_fn=create_batch_partial, batch_size=10
+    passage_keyword_json, shuffle=True, collate_fn=create_batch_partial, batch_size=10
 )
 
 for returndata in train_dataloader:
