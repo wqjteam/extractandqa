@@ -7,16 +7,18 @@ import pandas as pd
 import torch
 import torch.utils.data as Data
 import transformers
-from transformers import PreTrainedTokenizerBase, AutoTokenizer, AutoModel
+from transformers import PreTrainedTokenizerBase, AutoTokenizer, AutoModel, BertForQuestionAnswering
 from transformers.data.data_collator import _numpy_collate_batch, _torch_collate_batch, _tf_collate_batch, \
     DataCollatorMixin, DataCollatorForLanguageModeling
 from functools import partial
 # DataCollatorForLanguageModelingSpecial
+import BertForUnionNspAndQA
 from DataCollatorForLanguageModelingSpecial import DataCollatorForLanguageModelingSpecial
 
 model_name = 'bert-base-chinese'
 tokenizer = AutoTokenizer.from_pretrained(model_name)
-model = AutoModel.from_pretrained(model_name)
+model = BertForUnionNspAndQA.from_pretrained(model_name)
+model = BertForQuestionAnswering.from_pretrained(model_name)
 # data_collator = DataCollatorForLanguageModelingSpecial(tokenizer=tokenizer,
 #                                                              mlm=True,
 #                                                              mlm_probability=0.15,
