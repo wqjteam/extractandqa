@@ -166,13 +166,13 @@ class NspAndQAModelOutput(ModelOutput):
 
 
 
-# @add_start_docstrings(
-#     """
-#     Bert Model with a span classification head on top for extractive question-answering tasks like SQuAD (a linear
-#     layers on top of the hidden-states output to compute `span start logits` and `span end logits`).
-#     """,
-#     BERT_START_DOCSTRING,
-# )
+@add_start_docstrings(
+    """
+    Bert Model with a span classification head on top for extractive question-answering tasks like SQuAD (a linear
+    layers on top of the hidden-states output to compute `span start logits` and `span end logits`).
+    """,
+    BERT_START_DOCSTRING,
+)
 class BertForUnionNspAndQA(BertPreTrainedModel):
 
     _keys_to_ignore_on_load_unexpected = [r"pooler"]
