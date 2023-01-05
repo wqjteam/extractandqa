@@ -17,7 +17,8 @@ from DataCollatorForLanguageModelingSpecial import DataCollatorForLanguageModeli
 
 model_name = 'bert-base-chinese'
 tokenizer = AutoTokenizer.from_pretrained(model_name)
-# model = BertForUnionNspAndQA.from_pretrained(model_name)
+
+model = BertForUnionNspAndQA.from_pretrained(model_name)
 model = BertForQuestionAnswering.from_pretrained(model_name)
 print(model)
 # data_collator = DataCollatorForLanguageModelingSpecial(tokenizer=tokenizer,
