@@ -4,7 +4,7 @@ from typing import Optional, Union, Tuple
 import torch
 from torch import nn
 from torchvision.models.resnet import BasicBlock, Bottleneck
-from transformers import PretrainedConfig, PreTrainedModel, BertModel
+from transformers import PretrainedConfig, PreTrainedModel, BertModel, BertPreTrainedModel
 # 在编写自己的配置时，需要记住以下三点:
 # https://blog.csdn.net/wwlsm_zql/article/details/123822539
 # 你必须继承 PretrainedConfig,
@@ -19,51 +19,67 @@ from transformers.utils import ModelOutput
 
 
 class NspAndQAConfig(PretrainedConfig):
-    model_type = "resnet"
-    block=""
+
     def __init__(
             self,
-            block_type="bottleneck",
-            layers: List[int] = [3, 4, 6, 3],
-            num_classes: int = 1000,
-            input_channels: int = 3,
-            cardinality: int = 1,
-            base_width: int = 64,
-            stem_width: int = 64,
-            stem_type: str = "",
-            avg_down: bool = False,
+            attention_probs_dropout_prob: float = 0.1,
+            directionality: str = "bidi",
+            hidden_act: str = "gelu",
+            hidden_dropout_prob: int = 0.1,
+            hidden_size: int = 768,
+            initializer_range: float = 0.02,
+            intermediate_size: int = 3072,
+            layer_norm_eps: float = 1e-12,
+            max_position_embeddings: int = 512,
+            model_type: str = "bert",
+            num_attention_heads: int = 12,
+            num_hidden_layers: int = 12,
+            pad_token_id: int = 0,
+            pooler_fc_size: int = 768,
+            pooler_num_attention_heads: int = 12,
+            pooler_num_fc_layers: int = 3,
+            pooler_size_per_head: int = 128,
+            pooler_type: str = "first_token_transform",
+            type_vocab_size: int = 2,
+            vocab_size: int = 21128,
             **kwargs,
     ):
-        if block_type not in ["basic", "bottleneck"]:
-            raise ValueError(f"`block` must be 'basic' or bottleneck', got {block_type}..")
-        if stem_type not in ["", "deep", "deep-tiered"]:
-            raise ValueError(f"`stem_type` must be '', 'deep' or 'deep-tiered', got {block_type}..")
+        # if block_type not in ["basic", "bottleneck"]:
+        #     raise ValueError(f"`block` must be 'basic' or bottleneck', got {block_type}..")
+        # if stem_type not in ["", "deep", "deep-tiered"]:
+        #     raise ValueError(f"`stem_type` must be '', 'deep' or 'deep-tiered', got {block_type}..")
 
-        self.block_type = block_type
-        self.layers = layers
-        self.num_classes = num_classes
-        self.input_channels = input_channels
-        self.cardinality = cardinality
-        self.base_width = base_width
-        self.stem_width = stem_width
-        self.stem_type = stem_type
-        self.avg_down = avg_down
+        self.attention_probs_dropout_prob = attention_probs_dropout_prob
+        self.directionality = directionality
+        self.hidden_act = hidden_act
+        self.hidden_dropout_prob = hidden_dropout_prob
+        self.hidden_size = hidden_size
+        self.initializer_range = initializer_range
+        self.intermediate_size = intermediate_size
+        self.layer_norm_eps = layer_norm_eps
+        self.max_position_embeddings = max_position_embeddings
+        self.model_type = model_type
+        self.num_attention_heads = num_attention_heads
+        self.num_hidden_layers = num_hidden_layers
+        self.pad_token_id = pad_token_id
+        self.pooler_fc_size = pooler_fc_size
+        self.pooler_num_attention_heads = pooler_num_attention_heads
+        self.pooler_num_fc_layers = pooler_num_fc_layers
+        self.pooler_size_per_head = pooler_size_per_head
+        self.pooler_type = pooler_type
+        self.type_vocab_size = type_vocab_size
+        self.vocab_size = vocab_size
         super().__init__(**kwargs)
 
 
-NspAndQAConfig_config = NspAndQAConfig(block_type="bottleneck", stem_width=32, stem_type="deep", avg_down=True)
-NspAndQAConfig_config.save_pretrained("custom-resnet")
+NspAndQAConfig_config = NspAndQAConfig(model_type="bert")
+NspAndQAConfig_config.save_pretrained("custom-bert-qa")
 # 您还可以使用 PretrainedConfig 类的任何其他方法，如 push_to_Hub () ，将配置直接上传到 Hub。
 
-resnet50d_config = NspAndQAConfig.from_pretrained("custom-resnet")
+NspAndQAConfig_config = NspAndQAConfig.from_pretrained("custom-bert-qa")
 
-
-
-BLOCK_MAPPING = {"basic": BasicBlock, "bottleneck": Bottleneck}
 
 class NspAndQAModelOutput(ModelOutput):
-
-
     seq_relationship_scores: torch.FloatTensor = None
     start_logits: torch.FloatTensor = None
     end_logits: torch.FloatTensor = None
@@ -72,7 +88,9 @@ class NspAndQAModelOutput(ModelOutput):
     attentions: Optional[Tuple[torch.FloatTensor]] = None
 
 
-class BertForUnionNspAndQA(PreTrainedModel):
+# 如果继承PreTrainedModel 需要实现 _init_weights(self, module) 方法
+# 如果继承BertPreTrainedModel 则不需要实现该方法
+class BertForUnionNspAndQA(BertPreTrainedModel):
     config_class = NspAndQAConfig
 
     _keys_to_ignore_on_load_unexpected = [r"pooler"]
@@ -82,25 +100,22 @@ class BertForUnionNspAndQA(PreTrainedModel):
         self.num_labels = config.num_labels
 
         self.bert = BertModel(config, add_pooling_layer=True)
-        self.qa_outputs = nn.Linear(config.hidden_size, config.num_labels)
-
+        self.qa_outputs = nn.Linear(config.hidden_size, self.num_labels)
+        self.cls = nn.Linear(config.hidden_size, self.num_labels)
         # Initialize weights and apply final processing
         self.post_init()
 
-
     def forward(
-        self,
-        input_ids: Optional[torch.Tensor] = None,
-        attention_mask: Optional[torch.Tensor] = None,
-        token_type_ids: Optional[torch.Tensor] = None,
-        position_ids: Optional[torch.Tensor] = None,
-        head_mask: Optional[torch.Tensor] = None,
-        inputs_embeds: Optional[torch.Tensor] = None,
-        start_positions: Optional[torch.Tensor] = None,
-        end_positions: Optional[torch.Tensor] = None,
-        output_attentions: Optional[bool] = None,
-        output_hidden_states: Optional[bool] = None,
-        return_dict: Optional[bool] = None,
+            self,
+            input_ids: Optional[torch.Tensor] = None,
+            attention_mask: Optional[torch.Tensor] = None,
+            token_type_ids: Optional[torch.Tensor] = None,
+            position_ids: Optional[torch.Tensor] = None,
+            head_mask: Optional[torch.Tensor] = None,
+            inputs_embeds: Optional[torch.Tensor] = None,
+            output_attentions: Optional[bool] = None,
+            output_hidden_states: Optional[bool] = None,
+            return_dict: Optional[bool] = None,
     ) -> Union[Tuple[torch.Tensor], NspAndQAModelOutput]:
         r"""
         start_positions (`torch.LongTensor` of shape `(batch_size,)`, *optional*):
@@ -115,8 +130,8 @@ class BertForUnionNspAndQA(PreTrainedModel):
         return_dict = return_dict if return_dict is not None else self.config.use_return_dict
 
         outputs = self.bert(
-            input_ids,
-            attention_mask=attention_mask,
+            input_ids=input_ids, #必须传
+            attention_mask=attention_mask, #必须传
             token_type_ids=token_type_ids,
             position_ids=position_ids,
             head_mask=head_mask,

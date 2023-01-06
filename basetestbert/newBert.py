@@ -350,8 +350,7 @@ class EncoderLayer(nn.Module):
         return enc_outputs
 
 
-BertForQuestionAnswering
-BertForNextSentencePrediction
+
 
 
 class BERT(nn.Module):
