@@ -111,4 +111,4 @@ train_dataloader = Data.DataLoader(
 
 for returndata in train_dataloader:
     input_ids, masks_tensors, = returndata
-    model(input_ids=input_ids, attention_mask=masks_tensors, labels=2)
+    model_output=model(input_ids=input_ids, attention_mask=masks_tensors, labels=2)
