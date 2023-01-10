@@ -97,6 +97,13 @@ def create_batch(data, tokenizer, data_collator):
         mask_input_labels != -100)  # 二维数据，结果分为2个array,按照15的% mask 每行都会有此呗mask
     mask_input_postion = torch.reshape(mask_input_postion_y,
                                        (mask_input_labels.shape[0], -1))  # -1表示不指定 自己去推测,所有的mask的数据必须等长，方便后续的loss使用矩阵计算
+
+    #进行遍历
+    interindex=-1
+    for x in mask_input_postion_x:
+        if x!=interindex:
+            interindex+=1
+
     mask_input_value=[]
 
     return mask_input_ids, attention_masks, mask_input_postion,mask_input_value, nsp, start_positions, end_positions
