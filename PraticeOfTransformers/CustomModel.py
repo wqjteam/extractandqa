@@ -148,7 +148,7 @@ class BertForUnionNspAndQA(BertPreTrainedModel):
         start_logits = start_logits.squeeze(-1).contiguous()
         end_logits = end_logits.squeeze(-1).contiguous()
 
-        total_loss = None
+
         # if start_positions is not None and end_positions is not None:
         #     # If we are on multi-GPU, split add a dimension
         #     if len(start_positions.size()) > 1:
@@ -190,7 +190,7 @@ class BertForUnionNspAndQA(BertPreTrainedModel):
         # )
 
         return NspAndQAModelOutput(
-            seq_relationship_scores=total_loss,
+            seq_relationship_scores=seq_relationship_scores,
             start_logits=start_logits,
             end_logits=end_logits,
             sequence_output=sequence_output,
