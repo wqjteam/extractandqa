@@ -9,6 +9,7 @@ import torch.utils.data as Data
 
 # DataCollatorForLanguageModelingSpecial
 from torch import Tensor
+from torch.nn import CrossEntropyLoss
 from torch.nn.functional import pad
 from torch.nn.utils.rnn import pad_sequence
 from PraticeOfTransformers.Utils import pad_sequense_python
@@ -20,7 +21,7 @@ model_name = 'bert-base-chinese'
 tokenizer = AutoTokenizer.from_pretrained(model_name)
 model = BertForUnionNspAndQA.from_pretrained(model_name, num_labels=2)  #num_labels 测试用一下
 
-# model = BertForUnionNspAndQA.from_pretrained(model_name)
+#model = BertForUnionNspAndQA.from_pretrained(model_name)
 print(model)
 # data_collator = DataCollatorForLanguageModelingSpecial(tokenizer=tokenizer,
 #                                                              mlm=True,
@@ -138,4 +139,23 @@ train_dataloader = Data.DataLoader(
 for returndata in train_dataloader:
     mask_input_ids, attention_masks, mask_input_postion,mask_input_value, nsp, start_positions, end_positions = returndata
     model_output=model(input_ids=mask_input_ids, attention_mask=attention_masks)
+
+    prediction_scores=model_output.mlm_prediction_scores
+    nsp_relationship_scores=model_output.nsp_relationship_scores
+    qa_start_logits=model_output.qa_start_logits
+    qa_end_logits=model_output.qa_end_logits
+    '''
+    mlm loss 计算
+    '''
+    loss_fct = CrossEntropyLoss()  # -100 index = padding token 默认就是-100
+    masked_lm_loss = loss_fct(prediction_scores.view(-1, config.vocab_size), labels.view(-1))
+
+    '''
+    nsp loss 计算
+    '''
+
+
+    '''
+    qa loss 计算
+    '''
     print(model_output)

@@ -15,6 +15,7 @@ from transformers import PretrainedConfig, PreTrainedModel, BertModel, BertPreTr
 # 为您的配置定义一个 model_type (这里是 model_type = “ resnet”)并不是强制性的，除非您想用 auto classes 注册您的模型(参见上一节)。
 #
 # 完成这些之后，您就可以轻松地创建和保存您的配置，就像使用库中的任何其他模型配置一样。下面是我们如何创建一个 resnet50d 配置文件并保存它:
+from transformers.models.bert.modeling_bert import BertOnlyMLMHead
 from transformers.utils import ModelOutput
 
 
@@ -80,9 +81,10 @@ NspAndQAConfig_config = NspAndQAConfig.from_pretrained("custom-bert-qa")
 
 
 class NspAndQAModelOutput(ModelOutput):
-    seq_relationship_scores: torch.FloatTensor = None
-    start_logits: torch.FloatTensor = None
-    end_logits: torch.FloatTensor = None
+    mlm_prediction_scores: torch.FloatTensor = None
+    nsp_relationship_scores: torch.FloatTensor = None
+    qa_start_logits: torch.FloatTensor = None
+    qa_end_logits: torch.FloatTensor = None
     sequence_output: Optional[Tuple[torch.FloatTensor]] = None
     hidden_states: Optional[Tuple[torch.FloatTensor]] = None
     attentions: Optional[Tuple[torch.FloatTensor]] = None
@@ -101,7 +103,9 @@ class BertForUnionNspAndQA(BertPreTrainedModel):
 
         self.bert = BertModel(config, add_pooling_layer=True)
         self.qa_outputs = nn.Linear(config.hidden_size, self.num_labels)
-        self.cls = nn.Linear(config.hidden_size, self.num_labels)
+        self.nsp_cls = nn.Linear(config.hidden_size, self.num_labels)
+
+        self.mlm_cls = BertOnlyMLMHead(config)
         # Initialize weights and apply final processing
         self.post_init()
 
@@ -113,6 +117,8 @@ class BertForUnionNspAndQA(BertPreTrainedModel):
             position_ids: Optional[torch.Tensor] = None,
             head_mask: Optional[torch.Tensor] = None,
             inputs_embeds: Optional[torch.Tensor] = None,
+            encoder_hidden_states: Optional[torch.Tensor] = None,
+            encoder_attention_mask: Optional[torch.Tensor] = None,
             output_attentions: Optional[bool] = None,
             output_hidden_states: Optional[bool] = None,
             return_dict: Optional[bool] = None,
@@ -136,13 +142,18 @@ class BertForUnionNspAndQA(BertPreTrainedModel):
             position_ids=position_ids,
             head_mask=head_mask,
             inputs_embeds=inputs_embeds,
+            encoder_hidden_states=encoder_hidden_states,
+            encoder_attention_mask=encoder_attention_mask,
             output_attentions=output_attentions,
             output_hidden_states=output_hidden_states,
             return_dict=return_dict,
         )
 
         sequence_output = outputs[0]
-
+        #mlm
+        prediction_scores = self.mlm_cls(sequence_output)
+        shifted_prediction_scores = prediction_scores[:, :-1, :].contiguous()
+        #qa
         logits = self.qa_outputs(sequence_output)
         start_logits, end_logits = logits.split(1, dim=-1)
         start_logits = start_logits.squeeze(-1).contiguous()
@@ -169,10 +180,9 @@ class BertForUnionNspAndQA(BertPreTrainedModel):
         #     output = (start_logits, end_logits) + outputs[2:]
         #     return ((total_loss,) + output) if total_loss is not None else output
 
+        #nsp
         pooled_output = outputs[1]
-
-        seq_relationship_scores = self.cls(pooled_output)
-
+        seq_relationship_scores = self.nsp_cls(pooled_output)
         # next_sentence_loss = loss_fct(seq_relationship_scores.view(-1, 2), labels.view(-1))
         # next_sentence_loss = None
         # if labels is not None:
@@ -190,9 +200,10 @@ class BertForUnionNspAndQA(BertPreTrainedModel):
         # )
 
         return NspAndQAModelOutput(
-            seq_relationship_scores=seq_relationship_scores,
-            start_logits=start_logits,
-            end_logits=end_logits,
+            mlm_prediction_scores=shifted_prediction_scores,
+            nsp_relationship_scores=seq_relationship_scores,
+            qa_start_logits=start_logits,
+            qa_end_logits=end_logits,
             sequence_output=sequence_output,
             hidden_states=outputs.hidden_states,
             attentions=outputs.attentions,
