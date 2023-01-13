@@ -144,7 +144,7 @@ def create_batch(data, tokenizer, data_collator):
 create_batch_partial = partial(create_batch, tokenizer=tokenizer, data_collator=data_collator)
 
 train_dataloader = Data.DataLoader(
-    passage_keyword_json, shuffle=True, collate_fn=create_batch_partial, batch_size=2
+    passage_keyword_json, shuffle=True, collate_fn=create_batch_partial, batch_size=64
 )
 
 # 进行训练
@@ -180,9 +180,10 @@ for return_batch_data in train_dataloader:
 
     total_loss = mlm_loss + nsp_loss + qa_loss
 
-    optim.zero_grad()
 
-    total_loss.backward()
+    optim.zero_grad()# 每次计算的时候需要把上次计算的梯度设置为0
+
+    total_loss.backward() #反向传播
     print(total_loss)
 
-    optim.step()
+    optim.step() #用来更新参数，也就是的w和b的参数更新操作
