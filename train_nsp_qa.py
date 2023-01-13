@@ -12,6 +12,8 @@ from torch import Tensor
 from torch.nn import CrossEntropyLoss
 from torch.nn.functional import pad
 from torch.nn.utils.rnn import pad_sequence
+from torch.optim import AdamW
+
 from PraticeOfTransformers.Utils import pad_sequense_python
 from DataCollatorForLanguageModelingSpecial import DataCollatorForLanguageModelingSpecial
 from PraticeOfTransformers.CustomModel import BertForUnionNspAndQA
@@ -19,9 +21,12 @@ from transformers import AutoTokenizer, BertForQuestionAnswering
 
 model_name = 'bert-base-chinese'
 tokenizer = AutoTokenizer.from_pretrained(model_name)
-model = BertForUnionNspAndQA.from_pretrained(model_name, num_labels=2)  #num_labels 测试用一下
+model = BertForUnionNspAndQA.from_pretrained(model_name, num_labels=2)  # num_labels 测试用一下
 
-#model = BertForUnionNspAndQA.from_pretrained(model_name)
+# 用于梯度回归
+optim = AdamW(model.parameters(), lr=5e-5)
+
+# model = BertForUnionNspAndQA.from_pretrained(model_name)
 print(model)
 # data_collator = DataCollatorForLanguageModelingSpecial(tokenizer=tokenizer,
 #                                                              mlm=True,
@@ -53,7 +58,11 @@ encoded_dict = tokenizer.batch_encode_plus(
     return_attention_mask=True,  # 返回 attn. masks.
 )
 
-print(encoded_dict)
+# print(encoded_dict)
+
+nsp_id_label = {0: True, 1: False}
+
+nsp_label_id = {True: 0, False: 1}
 
 
 # print(output)
@@ -64,19 +73,19 @@ def create_batch(data, tokenizer, data_collator):
     text = list(text)  # tuple 转为 list
     questions = [q_a.get('question') for q_a in question_answer]
     answers = [q_a.get('answer') for q_a in question_answer]
-    nsp = []  # 用作判断两句是否相关
-    start_positions = []  # 记录起始位置
-    end_positions = []  # 记录终止始位置
+    nsp_labels = []  # 用作判断两句是否相关
+    start_positions_labels = []  # 记录起始位置
+    end_positions_labels = []  # 记录终止始位置
     for array_index, textstr in enumerate(text):
         start_in = textstr.find(answers[array_index])
         if start_in != -1:  # 判断是否存在
-            nsp.append(True)
-            start_positions.append(start_in + 1)  # 因为在tokenizer.batch_encode_plus中转换的时候添加了cls
-            end_positions.append(start_in + 1 + len(answers[array_index]))
+            nsp_labels.append(nsp_label_id.get(True))
+            start_positions_labels.append(start_in + 1)  # 因为在tokenizer.batch_encode_plus中转换的时候添加了cls
+            end_positions_labels.append(start_in + 1 + len(answers[array_index]))
         else:
-            nsp.append(False)
-            start_positions.append(-1)
-            end_positions.append(-1)
+            nsp_labels.append(nsp_label_id.get(False))
+            start_positions_labels.append(-1)
+            end_positions_labels.append(-1)
 
     # start_positions = [q_a.get('start_position') for q_a in question_answer]
     # end_positions = [q_a.get('end_position') for q_a in question_answer]
@@ -87,7 +96,7 @@ def create_batch(data, tokenizer, data_collator):
         batch_text_or_text_pairs=list(zip(text, questions)),  # 输入文本对 # 输入文本,采用list[tuple(text,question)]的方式进行输入
         add_special_tokens=True,  # 添加 '[CLS]' 和 '[SEP]'
         max_length=512,  # 填充 & 截断长度
-        truncation=True,
+        truncation=False,
         pad_to_max_length=True,
         return_attention_mask=True,  # 返回 attn. masks.
     )
@@ -97,12 +106,12 @@ def create_batch(data, tokenizer, data_collator):
     data_collator_output = data_collator(base_input_ids)
     mask_input_ids = data_collator_output["input_ids"]
 
-
-
+    mask_input_labels = data_collator_output["labels"]  # 需要获取不是-100的位置，证明其未被替换，这也是target -100的位置在计算crossentropyloss 会丢弃
     '''
-     进行遍历,获取原来的未被mask的数据,再对此进行对齐,方便后续会对此进行计算loss
+     进行遍历,获取原来的未被mask的数据,再对此进行对齐,方便后续会对此进行计算loss 在计算loss的时候 根据CrossEntropyLoss 的ingore_index 会根据target的属性，
+     直接去出某些值.不进行计算，所以不需要再进行转换
     '''
-    mask_input_labels = data_collator_output["labels"]  # 需要获取不是-100的位置，证明其未被替换
+    '''
     mask_input_postion_x, mask_input_postion_y = torch.where(
         mask_input_labels != -100)  # 二维数据，结果分为2个array,按照15的% mask 每行都会有此呗mask
     # mask_input_postion = torch.reshape(mask_input_postion_y, (mask_input_labels.shape[0], -1))  # -1表示不指定 自己去推测,所有的mask的数据必须等长，方便后续的loss使用矩阵计算
@@ -123,10 +132,12 @@ def create_batch(data, tokenizer, data_collator):
         rowindex+=1
     mask_input_postion=pad_sequense_python(mask_input_postion,-1) #后续计算的时候对于-1不进行计算
     mask_input_value=pad_sequense_python(mask_input_value,-1)
-
+     '''
 
     # 对于model只接受tensor[list] 必须为 list[tensor] 转为tensor[list]
-    return mask_input_ids , torch.stack(attention_masks), mask_input_postion,mask_input_value, nsp, start_positions, end_positions
+    return mask_input_ids, torch.stack(
+        attention_masks), mask_input_labels, torch.tensor(nsp_labels), torch.tensor(
+        start_positions_labels), torch.tensor(end_positions_labels)
 
 
 # 把一些参数固定
@@ -136,26 +147,42 @@ train_dataloader = Data.DataLoader(
     passage_keyword_json, shuffle=True, collate_fn=create_batch_partial, batch_size=2
 )
 
-for returndata in train_dataloader:
-    mask_input_ids, attention_masks, mask_input_postion,mask_input_value, nsp, start_positions, end_positions = returndata
-    model_output=model(input_ids=mask_input_ids, attention_mask=attention_masks)
+# 进行训练
+for return_batch_data in train_dataloader:
+    mask_input_ids, attention_masks, mask_input_labels, nsp_labels, start_positions_labels, end_positions_labels = return_batch_data
+    model_output = model(input_ids=mask_input_ids, attention_mask=attention_masks)
+    config = model.config
+    prediction_scores = model_output.mlm_prediction_scores
+    nsp_relationship_scores = model_output.nsp_relationship_scores
+    qa_start_logits = model_output.qa_start_logits
+    qa_end_logits = model_output.qa_end_logits
 
-    prediction_scores=model_output.mlm_prediction_scores
-    nsp_relationship_scores=model_output.nsp_relationship_scores
-    qa_start_logits=model_output.qa_start_logits
-    qa_end_logits=model_output.qa_end_logits
+    '''
+    loss的计算
+    '''
+    loss_fct = CrossEntropyLoss()  # -100 index = padding token 默认就是-100
     '''
     mlm loss 计算
     '''
-    loss_fct = CrossEntropyLoss()  # -100 index = padding token 默认就是-100
-    masked_lm_loss = loss_fct(prediction_scores.view(-1, config.vocab_size), labels.view(-1))
+    mlm_loss = loss_fct(prediction_scores.view(-1, config.vocab_size), mask_input_labels.view(-1))
 
     '''
     nsp loss 计算
     '''
-
+    nsp_loss = loss_fct(nsp_relationship_scores.view(-1, 2), nsp_labels.view(-1))
 
     '''
     qa loss 计算
     '''
-    print(model_output)
+    start_loss = loss_fct(qa_start_logits, start_positions_labels)
+    end_loss = loss_fct(qa_end_logits, end_positions_labels)
+    qa_loss = (start_loss + end_loss) / 2
+
+    total_loss = mlm_loss + nsp_loss + qa_loss
+
+    optim.zero_grad()
+
+    total_loss.backward()
+    print(total_loss)
+
+    optim.step()

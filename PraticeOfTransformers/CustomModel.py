@@ -151,11 +151,11 @@ class BertForUnionNspAndQA(BertPreTrainedModel):
 
         sequence_output = outputs[0]
         #mlm
-        prediction_scores = self.mlm_cls(sequence_output)
-        shifted_prediction_scores = prediction_scores[:, :-1, :].contiguous()
+        mlm_prediction_scores = self.mlm_cls(sequence_output).contiguous()
+        #contiguous相当于 flush 是内存改变（前面相当于做了一些lazy的操作）
         #qa
-        logits = self.qa_outputs(sequence_output)
-        start_logits, end_logits = logits.split(1, dim=-1)
+        qa_logits = self.qa_outputs(sequence_output)
+        start_logits, end_logits = qa_logits.split(1, dim=-1)
         start_logits = start_logits.squeeze(-1).contiguous()
         end_logits = end_logits.squeeze(-1).contiguous()
 
@@ -182,7 +182,7 @@ class BertForUnionNspAndQA(BertPreTrainedModel):
 
         #nsp
         pooled_output = outputs[1]
-        seq_relationship_scores = self.nsp_cls(pooled_output)
+        nsp_relationship_scores = self.nsp_cls(pooled_output)
         # next_sentence_loss = loss_fct(seq_relationship_scores.view(-1, 2), labels.view(-1))
         # next_sentence_loss = None
         # if labels is not None:
@@ -200,8 +200,8 @@ class BertForUnionNspAndQA(BertPreTrainedModel):
         # )
 
         return NspAndQAModelOutput(
-            mlm_prediction_scores=shifted_prediction_scores,
-            nsp_relationship_scores=seq_relationship_scores,
+            mlm_prediction_scores=mlm_prediction_scores,
+            nsp_relationship_scores=nsp_relationship_scores,
             qa_start_logits=start_logits,
             qa_end_logits=end_logits,
             sequence_output=sequence_output,
