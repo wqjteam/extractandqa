@@ -21,7 +21,8 @@ from transformers import AutoTokenizer, BertForQuestionAnswering
 
 model_name = 'bert-base-chinese'
 tokenizer = AutoTokenizer.from_pretrained(model_name)
-model = BertForUnionNspAndQA.from_pretrained(model_name, num_labels=2)  # num_labels 测试用一下
+model = BertForUnionNspAndQA.from_pretrained(model_name, num_labels=2)  # num_labels 测试用一下，看看参数是否传递
+batch_size = 64
 
 # 用于梯度回归
 optim = AdamW(model.parameters(), lr=5e-5)
@@ -41,8 +42,11 @@ data_collator = DataCollatorForLanguageModelingSpecial(tokenizer=tokenizer,
 '''
 获取数据
 '''
-passage_keyword_json = pd.read_json("./data/origin/intercontest/passage_qa_keyword.json", orient='records',
+passage_keyword_json = pd.read_json("./data/origin/intercontest/passage_qa_keyword_union_negate.json", orient='records',
                                     lines=True).head(100).drop("spos", axis=1)
+
+
+
 passage_keyword_json = passage_keyword_json.explode("q_a").values
 sent = ['我爱北京天安门，天安门上太阳升', '我爱北京中南海，毛主席在中南还', '改革开放好，我哎深圳，深圳是改革开放先驱']
 question = ['我爱什么?', '毛主席在哪?', '谁是改革开放先驱']
@@ -69,16 +73,17 @@ nsp_label_id = {True: 0, False: 1}
 
 
 def create_batch(data, tokenizer, data_collator):
-    text, question_answer, keyword = zip(*data)
-    text = list(text)  # tuple 转为 list
+    text, question_answer, keyword, nsp = zip(*data)
+    text = list(text)  # tuple 转为 list0
     questions = [q_a.get('question') for q_a in question_answer]
     answers = [q_a.get('answer') for q_a in question_answer]
+    nsps = [n for n in nsp]
     nsp_labels = []  # 用作判断两句是否相关
     start_positions_labels = []  # 记录起始位置
     end_positions_labels = []  # 记录终止始位置
     for array_index, textstr in enumerate(text):
         start_in = textstr.find(answers[array_index])
-        if start_in != -1:  # 判断是否存在
+        if start_in != -1 and nsps[array_index]==0:  # 判断是否存在
             nsp_labels.append(nsp_label_id.get(True))
             start_positions_labels.append(start_in + 1)  # 因为在tokenizer.batch_encode_plus中转换的时候添加了cls
             end_positions_labels.append(start_in + 1 + len(answers[array_index]))
@@ -143,8 +148,9 @@ def create_batch(data, tokenizer, data_collator):
 # 把一些参数固定
 create_batch_partial = partial(create_batch, tokenizer=tokenizer, data_collator=data_collator)
 
+# batch_size 除以2是为了 在后面认为添加了负样本   负样本和正样本是1：1
 train_dataloader = Data.DataLoader(
-    passage_keyword_json, shuffle=True, collate_fn=create_batch_partial, batch_size=64
+    passage_keyword_json, shuffle=True, collate_fn=create_batch_partial, batch_size=batch_size
 )
 
 # 进行训练
@@ -178,12 +184,11 @@ for return_batch_data in train_dataloader:
     end_loss = loss_fct(qa_end_logits, end_positions_labels)
     qa_loss = (start_loss + end_loss) / 2
 
-    total_loss = mlm_loss + nsp_loss + qa_loss
+    total_loss = mlm_loss + torch.exp(nsp_loss) + qa_loss
 
+    optim.zero_grad()  # 每次计算的时候需要把上次计算的梯度设置为0
 
-    optim.zero_grad()# 每次计算的时候需要把上次计算的梯度设置为0
-
-    total_loss.backward() #反向传播
+    total_loss.backward()  # 反向传播
     print(total_loss)
 
-    optim.step() #用来更新参数，也就是的w和b的参数更新操作
+    optim.step()  # 用来更新参数，也就是的w和b的参数更新操作
