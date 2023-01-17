@@ -133,7 +133,7 @@ sentence_df[['spos','q_a','keyword','nsp']]=sentence_df.apply(match_error_multip
 
 passage_qa_keyword_union_negate=pd.concat([default_sentence_df,sentence_df.drop("new_temp_index", axis=1)],ignore_index=True)
 passage_qa_keyword_union_negate= passage_qa_keyword_union_negate.sample(frac=1) #乱序处理
-passage_qa_keyword_union_negate.to_json('data/origin/intercontest/passage_qa_keyword_union_negate.json', force_ascii=False,orient='records', lines=True)
+# passage_qa_keyword_union_negate.to_json('data/origin/intercontest/passage_qa_keyword_union_negate.json', force_ascii=False,orient='records', lines=True)
 passage_keyword_json = pd.read_json("./data/origin/intercontest/passage_qa_keyword_union_negate.json", orient='records',
                                     lines=True).head(100).drop("spos", axis=1)
 print(passage_keyword_json.head())
