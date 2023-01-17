@@ -48,8 +48,7 @@ passage_keyword_json = pd.read_json("./data/origin/intercontest/passage_qa_keywo
 
 
 passage_keyword_json = passage_keyword_json.explode("q_a").values
-sent = ['我爱北京天安门，天安门上太阳升', '我爱北京中南海，毛主席在中南还', '改革开放好，我哎深圳，深圳是改革开放先驱']
-question = ['我爱什么?', '毛主席在哪?', '谁是改革开放先驱']
+
 
 # 创建一个实例，参数是tokenizer，如果不是batch的化，就采用tokenizer.encode_plus
 encoded_dict = tokenizer.batch_encode_plus(
