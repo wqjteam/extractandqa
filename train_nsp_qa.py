@@ -14,7 +14,7 @@ from PraticeOfTransformers.CustomModel import BertForUnionNspAndQA
 model_name = 'bert-base-chinese'
 tokenizer = AutoTokenizer.from_pretrained(model_name)
 model = BertForUnionNspAndQA.from_pretrained(model_name, num_labels=2)  # num_labels 测试用一下，看看参数是否传递
-batch_size = 1
+batch_size = 5
 
 # 用于梯度回归
 optim = AdamW(model.parameters(), lr=5e-5)
@@ -70,7 +70,8 @@ def create_batch(data, tokenizer, data_collator):
     text = list(text)  # tuple 转为 list0
     questions = [q_a.get('question') for q_a in question_answer]
     answers = [q_a.get('answer') for q_a in question_answer]
-    nsps = [n for n in nsp]
+    nsps = list(nsp) #tuple 转为list
+    keywords=list(keyword) #tuple 转为list
     nsp_labels = []  # 用作判断两句是否相关
     start_positions_labels = []  # 记录起始位置
     end_positions_labels = []  # 记录终止始位置
@@ -101,7 +102,7 @@ def create_batch(data, tokenizer, data_collator):
     base_input_ids = [torch.tensor(input_id) for input_id in encoded_dict['input_ids']]
     attention_masks = [torch.tensor(attention) for attention in encoded_dict['attention_mask']]
     # 传入的参数是tensor形式的input_ids，返回input_ids和label，label中-100的位置的词没有被mask
-    data_collator_output = data_collator(base_input_ids)
+    data_collator_output = data_collator(zip(base_input_ids,keywords))
     mask_input_ids = data_collator_output["input_ids"]
 
     mask_input_labels = data_collator_output["labels"]  # 需要获取不是-100的位置，证明其未被替换，这也是target -100的位置在计算crossentropyloss 会丢弃
