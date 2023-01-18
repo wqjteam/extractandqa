@@ -1,28 +1,20 @@
 ﻿# -*- coding: utf-8 -*-
-import copy
 from functools import partial
 
-import numpy as np
 import pandas as pd
 import torch
 import torch.utils.data as Data
-
-# DataCollatorForLanguageModelingSpecial
-from torch import Tensor
 from torch.nn import CrossEntropyLoss
-from torch.nn.functional import pad
-from torch.nn.utils.rnn import pad_sequence
 from torch.optim import AdamW
+from transformers import AutoTokenizer
 
-from PraticeOfTransformers.Utils import pad_sequense_python
 from DataCollatorForLanguageModelingSpecial import DataCollatorForLanguageModelingSpecial
 from PraticeOfTransformers.CustomModel import BertForUnionNspAndQA
-from transformers import AutoTokenizer, BertForQuestionAnswering
 
 model_name = 'bert-base-chinese'
 tokenizer = AutoTokenizer.from_pretrained(model_name)
 model = BertForUnionNspAndQA.from_pretrained(model_name, num_labels=2)  # num_labels 测试用一下，看看参数是否传递
-batch_size = 64
+batch_size = 1
 
 # 用于梯度回归
 optim = AdamW(model.parameters(), lr=5e-5)
@@ -45,7 +37,7 @@ data_collator = DataCollatorForLanguageModelingSpecial(tokenizer=tokenizer,
 passage_keyword_json = pd.read_json("./data/origin/intercontest/passage_qa_keyword_union_negate.json", orient='records',
                                     lines=True).head(100).drop("spos", axis=1)
 
-
+passage_keyword_json=passage_keyword_json[passage_keyword_json['q_a'].apply(lambda x:len(x)>=1)]
 
 passage_keyword_json = passage_keyword_json.explode("q_a").values
 
@@ -74,7 +66,7 @@ nsp_label_id = {True: 0, False: 1}
 
 
 def create_batch(data, tokenizer, data_collator):
-    text, question_answer, keyword, nsp = zip(*data)
+    text, question_answer, keyword, nsp = zip(*data)  #arrat的四列 转为tuple
     text = list(text)  # tuple 转为 list0
     questions = [q_a.get('question') for q_a in question_answer]
     answers = [q_a.get('answer') for q_a in question_answer]
@@ -101,8 +93,8 @@ def create_batch(data, tokenizer, data_collator):
     encoded_dict = tokenizer.batch_encode_plus(
         batch_text_or_text_pairs=list(zip(text, questions)),  # 输入文本对 # 输入文本,采用list[tuple(text,question)]的方式进行输入
         add_special_tokens=True,  # 添加 '[CLS]' 和 '[SEP]'
-        max_length=512,  # 填充 & 截断长度
-        truncation=False,
+        max_length=10,  # 填充 & 截断长度
+        truncation=True,
         pad_to_max_length=True,
         return_attention_mask=True,  # 返回 attn. masks.
     )
