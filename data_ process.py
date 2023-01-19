@@ -103,7 +103,7 @@ passage_json[['q_a', 'keyword']] = passage_json.apply(passagejoinqa, axis=1, res
 # passage_qa_keyword_json 是可以用于训练的
 passage_qa_keyword_json = pd.read_json("data/origin/intercontest/passage_qa_keyword.json", orient='records', lines=True)
 # print(passage_qa_keyword_json.head())
-passage_qa_keyword_json['nsp']=passage_qa_keyword_json.apply(lambda x: 0, axis=1)
+passage_qa_keyword_json['nsp']=passage_qa_keyword_json.apply(lambda x: 1, axis=1) #1的话为true
 
 sentence_df = pd.DataFrame(passage_qa_keyword_json['sentence'], index=passage_qa_keyword_json.index,
                            columns=['sentence'])
@@ -127,7 +127,7 @@ def match_error_multiple(sentence):
     alternativearray.remove(current_index)
     randomindex=random.randrange(len(alternativearray))
     q_a_spos_keyword=q_a_spos_keyword_df.iloc[randomindex]
-    return q_a_spos_keyword['spos'],q_a_spos_keyword['q_a'],q_a_spos_keyword['keyword'],1
+    return q_a_spos_keyword['spos'],q_a_spos_keyword['q_a'],q_a_spos_keyword['keyword'],0  #0的话为false
 
 sentence_df[['spos','q_a','keyword','nsp']]=sentence_df.apply(match_error_multiple, axis=1, result_type='expand')
 
