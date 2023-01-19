@@ -72,7 +72,7 @@ def create_batch(data, tokenizer, data_collator):
     answers = [q_a.get('answer') for q_a in question_answer]
     nsps = list(nsp) #tuple 转为list
     # 将keyword 转为index，表示出在index中位置
-    all_index=(text+question_answer).find_all(keyword)
+
 
     keywords=list(keyword) #tuple 转为list
     nsp_labels = []  # 用作判断两句是否相关
