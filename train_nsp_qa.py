@@ -8,13 +8,13 @@ from torch.nn import CrossEntropyLoss
 from torch.optim import AdamW
 from transformers import AutoTokenizer
 
-from DataCollatorForLanguageModelingSpecial import DataCollatorForLanguageModelingSpecial
+from PraticeOfTransformers.DataCollatorForLanguageModelingSpecial import DataCollatorForLanguageModelingSpecial
 from PraticeOfTransformers.CustomModel import BertForUnionNspAndQA
 
 model_name = 'bert-base-chinese'
 tokenizer = AutoTokenizer.from_pretrained(model_name)
 model = BertForUnionNspAndQA.from_pretrained(model_name, num_labels=2)  # num_labels 测试用一下，看看参数是否传递
-batch_size = 5
+batch_size = 1
 
 # 用于梯度回归
 optim = AdamW(model.parameters(), lr=5e-5)
@@ -57,9 +57,9 @@ encoded_dict = tokenizer.batch_encode_plus(
 
 # print(encoded_dict)
 
-nsp_id_label = {0: True, 1: False}
+nsp_id_label = {1: True, 0: False}
 
-nsp_label_id = {True: 0, False: 1}
+nsp_label_id = {True: 1, False: 0}
 
 
 # print(output)
@@ -71,13 +71,16 @@ def create_batch(data, tokenizer, data_collator):
     questions = [q_a.get('question') for q_a in question_answer]
     answers = [q_a.get('answer') for q_a in question_answer]
     nsps = list(nsp) #tuple 转为list
+    # 将keyword 转为index，表示出在index中位置
+    all_index=(text+question_answer).find_all(keyword)
+
     keywords=list(keyword) #tuple 转为list
     nsp_labels = []  # 用作判断两句是否相关
     start_positions_labels = []  # 记录起始位置
     end_positions_labels = []  # 记录终止始位置
     for array_index, textstr in enumerate(text):
         start_in = textstr.find(answers[array_index])
-        if start_in != -1 and nsps[array_index]==0:  # 判断是否存在
+        if start_in != -1 and nsps[array_index]==1:  # 判断是否存在
             nsp_labels.append(nsp_label_id.get(True))
             start_positions_labels.append(start_in + 1)  # 因为在tokenizer.batch_encode_plus中转换的时候添加了cls
             end_positions_labels.append(start_in + 1 + len(answers[array_index]))

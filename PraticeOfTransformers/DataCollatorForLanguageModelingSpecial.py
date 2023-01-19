@@ -4,8 +4,7 @@ from typing import Any, Optional, Tuple, Mapping, List, Union, Dict
 
 import numpy as np
 from transformers import PreTrainedTokenizerBase
-from transformers.data.data_collator import _numpy_collate_batch, _torch_collate_batch, _tf_collate_batch, \
-    DataCollatorMixin
+from transformers.data.data_collator import   DataCollatorMixin
 
 
 @dataclass
@@ -54,21 +53,27 @@ class DataCollatorForLanguageModelingSpecial(DataCollatorMixin):
 
             self.tf_mask_tokens = tf.function(self.tf_mask_tokens, jit_compile=True)
 
+
+
     def torch_call(self, examples: List[Union[List[int], Any, Dict[str, Any]]]) -> Dict[str, Any]:
         # Handle dict or lists with proper padding and conversion to tensor.
+        examples,kyewords=list(zip(*examples))  #更改过源码，进行mask的时候已经变成list（tuple（））
+        examples=list(examples) #更改过源码 转为list
+        kyewords=list(kyewords) #更改过源码 转为list
         if isinstance(examples[0], Mapping):
             batch = self.tokenizer.pad(examples, return_tensors="pt", pad_to_multiple_of=self.pad_to_multiple_of)
         else:
+            #直接执行到这
             batch = {
-                "input_ids": _torch_collate_batch(examples, self.tokenizer, pad_to_multiple_of=self.pad_to_multiple_of)
+                "input_ids": self._torch_collate_batch(examples=examples, tokenizer= self.tokenizer, pad_to_multiple_of=self.pad_to_multiple_of)
             }
 
         # If special token mask has been preprocessed, pop it from the dict.
         special_tokens_mask = batch.pop("special_tokens_mask", None)
         if self.mlm:
             batch["input_ids"], batch["labels"] = self.torch_mask_tokens(
-                batch["input_ids"], special_tokens_mask=special_tokens_mask
-            )
+                batch["input_ids"], special_tokens_mask=special_tokens_mask,special_keyword_mask=kyewords
+            ) # mask language model 为True的时候 运行这里
         else:
             labels = batch["input_ids"].clone()
             if self.tokenizer.pad_token_id is not None:
@@ -76,15 +81,17 @@ class DataCollatorForLanguageModelingSpecial(DataCollatorMixin):
             batch["labels"] = labels
         return batch
 
-    def torch_mask_tokens(self, inputs: Any, special_tokens_mask: Optional[Any] = None) -> Tuple[Any, Any]:
+
+    def torch_mask_tokens(self, inputs: Any, special_tokens_mask: Optional[Any] = None,special_keyword_mask: Optional[Any] = None) -> Tuple[Any, Any]:
         """
         Prepare masked tokens inputs/labels for masked language modeling: 80% MASK, 10% random, 10% original.
         """
         import torch
 
+
         labels = inputs.clone()
         # We sample a few tokens in each sequence for MLM training (with probability `self.mlm_probability`)
-        probability_matrix = torch.full(labels.shape, self.mlm_probability)
+        probability_matrix = torch.full(labels.shape, self.mlm_probability) # special_tokens_mask相关的直接填充为0 表示在进行伯努利抽样的时候概率均为mlm_probability
         if special_tokens_mask is None:
             special_tokens_mask = [
                 self.tokenizer.get_special_tokens_mask(val, already_has_special_tokens=True) for val in labels.tolist()
@@ -93,11 +100,13 @@ class DataCollatorForLanguageModelingSpecial(DataCollatorMixin):
         else:
             special_tokens_mask = special_tokens_mask.bool()
 
-        probability_matrix.masked_fill_(special_tokens_mask, value=0.0)
-        masked_indices = torch.bernoulli(probability_matrix).bool()
+        probability_matrix.masked_fill_(special_tokens_mask, value=0.0)  # special_tokens_mask相关的直接填充为0 表示在进行伯努利抽样的时候没有几率转为1
+        masked_indices = torch.bernoulli(probability_matrix).bool()  # 每个元素都有是单一抽样的，都有probability_matrix的几率为1  .bool()将1 转为true 0 转为false
+        masked_indices
+
         labels[~masked_indices] = -100  # We only compute loss on masked tokens
 
-        # 80% of the time, we replace masked input tokens with tokenizer.mask_token ([MASK])
+        # 80% of the time, we replace masked input tokens with tokenizer.mask_token ([MASK]) 使用
         indices_replaced = torch.bernoulli(torch.full(labels.shape, 0.8)).bool() & masked_indices
         inputs[indices_replaced] = self.tokenizer.convert_tokens_to_ids(self.tokenizer.mask_token)
 
@@ -109,7 +118,7 @@ class DataCollatorForLanguageModelingSpecial(DataCollatorMixin):
         # The rest of the time (10% of the time) we keep the masked input tokens unchanged
         return inputs, labels
 
-    def _torch_collate_batch(examples, tokenizer, pad_to_multiple_of: Optional[int] = None):
+    def _torch_collate_batch(self,examples: List[Union[List[int], Any, Dict[str, Any]]], tokenizer, pad_to_multiple_of: Optional[int] = None):
         """Collate `examples` into a batch, using the information in `tokenizer` for padding if necessary."""
         import torch
 
@@ -143,5 +152,4 @@ class DataCollatorForLanguageModelingSpecial(DataCollatorMixin):
             else:
                 result[i, -example.shape[0]:] = example
         return result
-
 
