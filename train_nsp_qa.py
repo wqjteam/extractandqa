@@ -14,7 +14,7 @@ from PraticeOfTransformers.CustomModel import BertForUnionNspAndQA
 model_name = 'bert-base-chinese'
 tokenizer = AutoTokenizer.from_pretrained(model_name)
 model = BertForUnionNspAndQA.from_pretrained(model_name, num_labels=2)  # num_labels 测试用一下，看看参数是否传递
-batch_size = 1
+batch_size = 2
 
 # 用于梯度回归
 optim = AdamW(model.parameters(), lr=5e-5)
@@ -37,7 +37,7 @@ data_collator = DataCollatorForLanguageModelingSpecial(tokenizer=tokenizer,
 passage_keyword_json = pd.read_json("./data/origin/intercontest/passage_qa_keyword_union_negate.json", orient='records',
                                     lines=True).head(100).drop("spos", axis=1)
 
-passage_keyword_json=passage_keyword_json[passage_keyword_json['q_a'].apply(lambda x:len(x)>=1)]
+passage_keyword_json = passage_keyword_json[passage_keyword_json['q_a'].apply(lambda x: len(x) >= 1)]
 
 passage_keyword_json = passage_keyword_json.explode("q_a").values
 
@@ -66,21 +66,19 @@ nsp_label_id = {True: 1, False: 0}
 
 
 def create_batch(data, tokenizer, data_collator):
-    text, question_answer, keyword, nsp = zip(*data)  #arrat的四列 转为tuple
+    text, question_answer, keyword, nsp = zip(*data)  # arrat的四列 转为tuple
     text = list(text)  # tuple 转为 list0
     questions = [q_a.get('question') for q_a in question_answer]
     answers = [q_a.get('answer') for q_a in question_answer]
-    nsps = list(nsp) #tuple 转为list
-    # 将keyword 转为index，表示出在index中位置
+    nsps = list(nsp)  # tuple 转为list
 
-
-    keywords=list(keyword) #tuple 转为list
+    keywords = [kw[0] for kw in keyword] # tuple 转为list 变成了双重的list 还是遍历转
     nsp_labels = []  # 用作判断两句是否相关
     start_positions_labels = []  # 记录起始位置
     end_positions_labels = []  # 记录终止始位置
     for array_index, textstr in enumerate(text):
         start_in = textstr.find(answers[array_index])
-        if start_in != -1 and nsps[array_index]==1:  # 判断是否存在
+        if start_in != -1 and nsps[array_index] == 1:  # 判断是否存在
             nsp_labels.append(nsp_label_id.get(True))
             start_positions_labels.append(start_in + 1)  # 因为在tokenizer.batch_encode_plus中转换的时候添加了cls
             end_positions_labels.append(start_in + 1 + len(answers[array_index]))
@@ -94,7 +92,7 @@ def create_batch(data, tokenizer, data_collator):
     '''
     bert是双向的encode 所以qestion和text放在前面和后面区别不大
     '''
-    encoded_dict = tokenizer.batch_encode_plus(
+    encoded_dict_textandquestion = tokenizer.batch_encode_plus(
         batch_text_or_text_pairs=list(zip(text, questions)),  # 输入文本对 # 输入文本,采用list[tuple(text,question)]的方式进行输入
         add_special_tokens=True,  # 添加 '[CLS]' 和 '[SEP]'
         max_length=10,  # 填充 & 截断长度
@@ -102,10 +100,15 @@ def create_batch(data, tokenizer, data_collator):
         pad_to_max_length=True,
         return_attention_mask=True,  # 返回 attn. masks.
     )
-    base_input_ids = [torch.tensor(input_id) for input_id in encoded_dict['input_ids']]
-    attention_masks = [torch.tensor(attention) for attention in encoded_dict['attention_mask']]
+    encoded_dict_keywords = tokenizer.batch_encode_plus(batch_text_or_text_pairs=keywords, add_special_tokens=False,
+                                                    # 添加 '[CLS]' 和 '[SEP]'
+                                                    pad_to_max_length=True,
+                                                    return_attention_mask=False
+                                                    )
+    base_input_ids = [torch.tensor(input_id) for input_id in encoded_dict_textandquestion['input_ids']]
+    attention_masks = [torch.tensor(attention) for attention in encoded_dict_textandquestion['attention_mask']]
     # 传入的参数是tensor形式的input_ids，返回input_ids和label，label中-100的位置的词没有被mask
-    data_collator_output = data_collator(zip(base_input_ids,keywords))
+    data_collator_output = data_collator(zip(base_input_ids, encoded_dict_keywords['input_ids']))
     mask_input_ids = data_collator_output["input_ids"]
 
     mask_input_labels = data_collator_output["labels"]  # 需要获取不是-100的位置，证明其未被替换，这也是target -100的位置在计算crossentropyloss 会丢弃

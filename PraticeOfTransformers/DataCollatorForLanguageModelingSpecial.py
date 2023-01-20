@@ -102,7 +102,7 @@ class DataCollatorForLanguageModelingSpecial(DataCollatorMixin):
 
         probability_matrix.masked_fill_(special_tokens_mask, value=0.0)  # special_tokens_mask相关的直接填充为0 表示在进行伯努利抽样的时候没有几率转为1
         masked_indices = torch.bernoulli(probability_matrix).bool()  # 每个元素都有是单一抽样的，都有probability_matrix的几率为1  .bool()将1 转为true 0 转为false
-        masked_indices
+        prepare_mask_index=np.argwhere(masked_indices.numpy()==True) #torch的版本太低 没找到argwhere函数
 
         labels[~masked_indices] = -100  # We only compute loss on masked tokens
 
