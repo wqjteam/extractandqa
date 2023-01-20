@@ -104,6 +104,7 @@ class DataCollatorForLanguageModelingSpecial(DataCollatorMixin):
         masked_indices = torch.bernoulli(probability_matrix).bool()  # 每个元素都有是单一抽样的，都有probability_matrix的几率为1  .bool()将1 转为true 0 转为false
         prepare_mask_index=np.argwhere(masked_indices.numpy()==True) #torch的版本太低 没找到argwhere函数
 
+
         labels[~masked_indices] = -100  # We only compute loss on masked tokens
 
         # 80% of the time, we replace masked input tokens with tokenizer.mask_token ([MASK]) 使用
