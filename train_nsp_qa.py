@@ -95,14 +95,14 @@ def create_batch(data, tokenizer, data_collator):
     encoded_dict_textandquestion = tokenizer.batch_encode_plus(
         batch_text_or_text_pairs=list(zip(text, questions)),  # 输入文本对 # 输入文本,采用list[tuple(text,question)]的方式进行输入
         add_special_tokens=True,  # 添加 '[CLS]' 和 '[SEP]'
-        max_length=10,  # 填充 & 截断长度
+        max_length=256,  # 填充 & 截断长度
         truncation=True,
         pad_to_max_length=True,
         return_attention_mask=True,  # 返回 attn. masks.
     )
     encoded_dict_keywords = tokenizer.batch_encode_plus(batch_text_or_text_pairs=keywords, add_special_tokens=False,
                                                     # 添加 '[CLS]' 和 '[SEP]'
-                                                    pad_to_max_length=True,
+                                                    pad_to_max_length=False,
                                                     return_attention_mask=False
                                                     )
     base_input_ids = [torch.tensor(input_id) for input_id in encoded_dict_textandquestion['input_ids']]

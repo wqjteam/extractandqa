@@ -103,6 +103,20 @@ class DataCollatorForLanguageModelingSpecial(DataCollatorMixin):
         probability_matrix.masked_fill_(special_tokens_mask, value=0.0)  # special_tokens_mask相关的直接填充为0 表示在进行伯努利抽样的时候没有几率转为1
         masked_indices = torch.bernoulli(probability_matrix).bool()  # 每个元素都有是单一抽样的，都有probability_matrix的几率为1  .bool()将1 转为true 0 转为false
         prepare_mask_index=np.argwhere(masked_indices.numpy()==True) #torch的版本太低 没找到argwhere函数
+        hit_index=[]
+        for row_index,input_data in enumerate(inputs.numpy()):
+            hit_index.append(self.get_index_in_array(input_data,special_keyword_mask[row_index]))
+
+
+
+        #对于涉及到关键词的数据进行单个词mask
+        for  row,col in  prepare_mask_index:    #所有得代准备得mask
+            for  (front,rear) in hit_index[row]: #前后 包前不包后
+                if col >=front and col<rear:
+                    masked_indices[row][front:rear]=True
+
+
+
 
 
         labels[~masked_indices] = -100  # We only compute loss on masked tokens
@@ -153,4 +167,18 @@ class DataCollatorForLanguageModelingSpecial(DataCollatorMixin):
             else:
                 result[i, -example.shape[0]:] = example
         return result
+
+
+    def get_index_in_array(self,be_search_array,target_array):
+        a = be_search_array
+        b = target_array
+        index = 0
+        find_all_index = []
+        while (index < len(a)):
+            if a[index] == b[0] and (index + len(b)) <= len(a) and (a[index:index + len(b)] == b[:]).all():
+                find_all_index.append((index, index + len(b)))
+                index += len(b)
+            else:
+                index += 1
+        return find_all_index
 
