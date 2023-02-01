@@ -84,8 +84,9 @@ def create_batch(data, tokenizer, data_collator):
             end_positions_labels.append(start_in + 1 + len(answers[array_index]))
         else:
             nsp_labels.append(nsp_label_id.get(False))
-            start_positions_labels.append(-1)
-            end_positions_labels.append(-1)
+            #若找不到，则将start得位置 放在最末尾的位置 pad或者 [SEP]
+            start_positions_labels.append(len(textstr)) #应该是len(textstr) -1得 但是因为在tokenizer.batch_encode_plus中转换的时候添加了cls 所以就是len(textstr) -1 +1
+            end_positions_labels.append(len(textstr))
 
     # start_positions = [q_a.get('start_position') for q_a in question_answer]
     # end_positions = [q_a.get('end_position') for q_a in question_answer]
@@ -192,3 +193,9 @@ for return_batch_data in train_dataloader:
     print(total_loss)
 
     optim.step()  # 用来更新参数，也就是的w和b的参数更新操作
+
+
+torch.save(model.state_dict(), "model/path1")
+
+
+
