@@ -4,8 +4,10 @@ from functools import partial
 import pandas as pd
 import torch
 import torch.utils.data as Data
+import torchmetrics
 from torch.nn import CrossEntropyLoss
 from torch.optim import AdamW
+
 from transformers import AutoTokenizer
 
 from PraticeOfTransformers.DataCollatorForLanguageModelingSpecial import DataCollatorForLanguageModelingSpecial
@@ -14,10 +16,10 @@ from PraticeOfTransformers.CustomModel import BertForUnionNspAndQA
 model_name = 'bert-base-chinese'
 tokenizer = AutoTokenizer.from_pretrained(model_name)
 model = BertForUnionNspAndQA.from_pretrained(model_name, num_labels=2)  # num_labels 测试用一下，看看参数是否传递
-batch_size = 2
-
+batch_size = 32
+epoch_size = 10
 # 用于梯度回归
-optim = AdamW(model.parameters(), lr=5e-5)
+optim = AdamW(model.parameters(), lr=5e-5)  # 需要填写模型的参数
 
 # model = BertForUnionNspAndQA.from_pretrained(model_name)
 print(model)
@@ -35,7 +37,7 @@ data_collator = DataCollatorForLanguageModelingSpecial(tokenizer=tokenizer,
 获取数据
 '''
 passage_keyword_json = pd.read_json("./data/origin/intercontest/passage_qa_keyword_union_negate.json", orient='records',
-                                    lines=True).head(100).drop("spos", axis=1)
+                                    lines=True).drop("spos", axis=1)
 
 passage_keyword_json = passage_keyword_json[passage_keyword_json['q_a'].apply(lambda x: len(x) >= 1)]
 
@@ -43,6 +45,10 @@ passage_keyword_json = passage_keyword_json.explode("q_a").values
 
 sent = ['我爱北京天安门，天安门上太阳升', '我爱北京中南海，毛主席在中南还', '改革开放好，我哎深圳，深圳是改革开放先驱']
 question = ['我爱什么?', '毛主席在哪?', '谁是改革开放先驱']
+
+train_data, dev_data = Data.random_split(passage_keyword_json, [int(len(passage_keyword_json) * 0.9),
+                                                                len(passage_keyword_json) - int(
+                                                                    len(passage_keyword_json) * 0.9)])
 
 # 创建一个实例，参数是tokenizer，如果不是batch的化，就采用tokenizer.encode_plus
 encoded_dict = tokenizer.batch_encode_plus(
@@ -72,7 +78,7 @@ def create_batch(data, tokenizer, data_collator):
     answers = [q_a.get('answer') for q_a in question_answer]
     nsps = list(nsp)  # tuple 转为list
 
-    keywords = [kw[0] for kw in keyword] # tuple 转为list 变成了双重的list 还是遍历转
+    keywords = [kw[0] for kw in keyword]  # tuple 转为list 变成了双重的list 还是遍历转
     nsp_labels = []  # 用作判断两句是否相关
     start_positions_labels = []  # 记录起始位置
     end_positions_labels = []  # 记录终止始位置
@@ -84,8 +90,9 @@ def create_batch(data, tokenizer, data_collator):
             end_positions_labels.append(start_in + 1 + len(answers[array_index]))
         else:
             nsp_labels.append(nsp_label_id.get(False))
-            #若找不到，则将start得位置 放在最末尾的位置 pad或者 [SEP]
-            start_positions_labels.append(len(textstr)) #应该是len(textstr) -1得 但是因为在tokenizer.batch_encode_plus中转换的时候添加了cls 所以就是len(textstr) -1 +1
+            # 若找不到，则将start得位置 放在最末尾的位置 pad或者 [SEP]
+            start_positions_labels.append(
+                len(textstr))  # 应该是len(textstr) -1得 但是因为在tokenizer.batch_encode_plus中转换的时候添加了cls 所以就是len(textstr) -1 +1
             end_positions_labels.append(len(textstr))
 
     # start_positions = [q_a.get('start_position') for q_a in question_answer]
@@ -102,10 +109,10 @@ def create_batch(data, tokenizer, data_collator):
         return_attention_mask=True,  # 返回 attn. masks.
     )
     encoded_dict_keywords = tokenizer.batch_encode_plus(batch_text_or_text_pairs=keywords, add_special_tokens=False,
-                                                    # 添加 '[CLS]' 和 '[SEP]'
-                                                    pad_to_max_length=False,
-                                                    return_attention_mask=False
-                                                    )
+                                                        # 添加 '[CLS]' 和 '[SEP]'
+                                                        pad_to_max_length=False,
+                                                        return_attention_mask=False
+                                                        )
     base_input_ids = [torch.tensor(input_id) for input_id in encoded_dict_textandquestion['input_ids']]
     attention_masks = [torch.tensor(attention) for attention in encoded_dict_textandquestion['attention_mask']]
     # 传入的参数是tensor形式的input_ids，返回input_ids和label，label中-100的位置的词没有被mask
@@ -151,51 +158,116 @@ create_batch_partial = partial(create_batch, tokenizer=tokenizer, data_collator=
 
 # batch_size 除以2是为了 在后面认为添加了负样本   负样本和正样本是1：1
 train_dataloader = Data.DataLoader(
-    passage_keyword_json, shuffle=True, collate_fn=create_batch_partial, batch_size=batch_size
+    train_data, shuffle=True, collate_fn=create_batch_partial, batch_size=batch_size
 )
 
+dev_dataloader = Data.DataLoader(
+    dev_data, shuffle=True, collate_fn=create_batch_partial, batch_size=batch_size
+)
+
+# 实例化相关metrics的计算对象
+model_recall = torchmetrics.Recall(average='macro', num_classes=2)
+model_precision = torchmetrics.Precision(average='macro', num_classes=2)
+model_f1 = torchmetrics.F1Score(average="macro", num_classes=2)
+
+
+#  评估函数，用作训练一轮，评估一轮使用
+def evaluate(model, data_loader):
+    # 依次处理每批数据
+    for return_batch_data in train_dataloader:  # 一个batch一个bach的训练完所有数据
+        mask_input_ids, attention_masks, mask_input_labels, nsp_labels, start_positions_labels, end_positions_labels = return_batch_data
+        model_output = model(input_ids=mask_input_ids, attention_mask=attention_masks)
+        config = model.config
+        prediction_scores = model_output.mlm_prediction_scores
+        nsp_relationship_scores = model_output.nsp_relationship_scores
+        qa_start_logits = model_output.qa_start_logits
+        qa_end_logits = model_output.qa_end_logits
+
+        '''
+        loss的计算
+        '''
+        loss_fct = CrossEntropyLoss()  # -100 index = padding token 默认就是-100
+        '''
+        mlm loss 计算
+        '''
+        mlm_loss = loss_fct(prediction_scores.view(-1, config.vocab_size), mask_input_labels.view(-1))
+
+        '''
+        nsp loss 计算
+        '''
+        nsp_loss = loss_fct(nsp_relationship_scores.view(-1, 2), nsp_labels.view(-1))
+
+        '''
+        qa loss 计算
+        '''
+        start_loss = loss_fct(qa_start_logits, start_positions_labels)
+        end_loss = loss_fct(qa_end_logits, end_positions_labels)
+        qa_loss = (start_loss + end_loss) / 2
+
+        total_loss = mlm_loss + torch.exp(nsp_loss) + qa_loss
+
+        optim.zero_grad()  # 每次计算的时候需要把上次计算的梯度设置为0
+
+        total_loss.backward()  # 反向传播
+        print(total_loss)
+
+        optim.step()  # 用来更新参数，也就是的w和b的参数更新操作
+        # 损失函数的平均值
+
+        # 按照概率最大原则，计算单字的标签编号
+        # argmax计算logits中最大元素值的索引，从0开始
+
+    f1_score = model_f1.compute()
+    recall = model_recall.compute()
+    precision = model_precision.compute()
+
+    # 清空计算对象
+    model_precision.reset()
+    model_f1.reset()
+    model_recall.reset()
+    print("评估准确度: %.6f - 召回率: %.6f - f1得分: %.6f- 损失函数: %.6f" % (precision, recall, f1_score, total_loss))
+
+
 # 进行训练
-for return_batch_data in train_dataloader:
-    mask_input_ids, attention_masks, mask_input_labels, nsp_labels, start_positions_labels, end_positions_labels = return_batch_data
-    model_output = model(input_ids=mask_input_ids, attention_mask=attention_masks)
-    config = model.config
-    prediction_scores = model_output.mlm_prediction_scores
-    nsp_relationship_scores = model_output.nsp_relationship_scores
-    qa_start_logits = model_output.qa_start_logits
-    qa_end_logits = model_output.qa_end_logits
+for epoch in range(epoch_size):  # 所有数据迭代总的次数
 
-    '''
-    loss的计算
-    '''
-    loss_fct = CrossEntropyLoss()  # -100 index = padding token 默认就是-100
-    '''
-    mlm loss 计算
-    '''
-    mlm_loss = loss_fct(prediction_scores.view(-1, config.vocab_size), mask_input_labels.view(-1))
+    for return_batch_data in train_dataloader:  # 一个batch一个bach的训练完所有数据
+        mask_input_ids, attention_masks, mask_input_labels, nsp_labels, start_positions_labels, end_positions_labels = return_batch_data
+        model_output = model(input_ids=mask_input_ids, attention_mask=attention_masks)
+        config = model.config
+        prediction_scores = model_output.mlm_prediction_scores
+        nsp_relationship_scores = model_output.nsp_relationship_scores
+        qa_start_logits = model_output.qa_start_logits
+        qa_end_logits = model_output.qa_end_logits
 
-    '''
-    nsp loss 计算
-    '''
-    nsp_loss = loss_fct(nsp_relationship_scores.view(-1, 2), nsp_labels.view(-1))
+        '''
+        loss的计算
+        '''
+        loss_fct = CrossEntropyLoss()  # -100 index = padding token 默认就是-100
+        '''
+        mlm loss 计算
+        '''
+        mlm_loss = loss_fct(prediction_scores.view(-1, config.vocab_size), mask_input_labels.view(-1))
 
-    '''
-    qa loss 计算
-    '''
-    start_loss = loss_fct(qa_start_logits, start_positions_labels)
-    end_loss = loss_fct(qa_end_logits, end_positions_labels)
-    qa_loss = (start_loss + end_loss) / 2
+        '''
+        nsp loss 计算
+        '''
+        nsp_loss = loss_fct(nsp_relationship_scores.view(-1, 2), nsp_labels.view(-1))
 
-    total_loss = mlm_loss + torch.exp(nsp_loss) + qa_loss
+        '''
+        qa loss 计算
+        '''
+        start_loss = loss_fct(qa_start_logits, start_positions_labels)
+        end_loss = loss_fct(qa_end_logits, end_positions_labels)
+        qa_loss = (start_loss + end_loss) / 2
 
-    optim.zero_grad()  # 每次计算的时候需要把上次计算的梯度设置为0
+        total_loss = mlm_loss + (torch.exp(nsp_loss) - 1) + qa_loss
 
-    total_loss.backward()  # 反向传播
-    print(total_loss)
+        optim.zero_grad()  # 每次计算的时候需要把上次计算的梯度设置为0
 
-    optim.step()  # 用来更新参数，也就是的w和b的参数更新操作
+        total_loss.backward()  # 反向传播
+        print(total_loss)
 
+        optim.step()  # 用来更新参数，也就是的w和b的参数更新操作
 
-torch.save(model.state_dict(), "model/path1")
-
-
-
+torch.save(model.state_dict(), "save_model/path1")
