@@ -16,7 +16,7 @@ from PraticeOfTransformers.CustomModel import BertForUnionNspAndQA
 model_name = 'bert-base-chinese'
 tokenizer = AutoTokenizer.from_pretrained(model_name)
 model = BertForUnionNspAndQA.from_pretrained(model_name, num_labels=2)  # num_labels 测试用一下，看看参数是否传递
-batch_size = 32
+batch_size = 2
 epoch_size = 10
 # 用于梯度回归
 optim = AdamW(model.parameters(), lr=5e-5)  # 需要填写模型的参数
@@ -103,7 +103,7 @@ def create_batch(data, tokenizer, data_collator):
     encoded_dict_textandquestion = tokenizer.batch_encode_plus(
         batch_text_or_text_pairs=list(zip(text, questions)),  # 输入文本对 # 输入文本,采用list[tuple(text,question)]的方式进行输入
         add_special_tokens=True,  # 添加 '[CLS]' 和 '[SEP]'
-        max_length=256,  # 填充 & 截断长度
+        max_length=512,  # 填充 & 截断长度
         truncation=True,
         pad_to_max_length=True,
         return_attention_mask=True,  # 返回 attn. masks.
@@ -166,17 +166,24 @@ dev_dataloader = Data.DataLoader(
 )
 
 # 实例化相关metrics的计算对象
-model_recall = torchmetrics.Recall(average='macro', num_classes=2)
-model_precision = torchmetrics.Precision(average='macro', num_classes=2)
-model_f1 = torchmetrics.F1Score(average="macro", num_classes=2)
+model_recall = torchmetrics.Recall(task='binary', average='macro', num_classes=2)
+model_precision = torchmetrics.Precision(task='binary', average='macro', num_classes=2)
+model_f1 = torchmetrics.F1Score(task='binary', average="macro", num_classes=2)
+
+# 看是否用cpu或者gpu训练
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+print("-----------------------------------训练模式为%s------------------------------------" % device)
+model.to(device)
 
 
 #  评估函数，用作训练一轮，评估一轮使用
 def evaluate(model, data_loader):
     # 依次处理每批数据
     for return_batch_data in train_dataloader:  # 一个batch一个bach的训练完所有数据
-        mask_input_ids, attention_masks, mask_input_labels, nsp_labels, start_positions_labels, end_positions_labels = return_batch_data
-        model_output = model(input_ids=mask_input_ids, attention_mask=attention_masks)
+        mask_input_ids, mask_input_labels, nsp_labels, start_positions_labels, end_positions_labels = return_batch_data
+        model_output = model(input_ids=mask_input_ids.to(device), attention_mask=attention_masks.to(device))
+        # 进行转换
+
         config = model.config
         prediction_scores = model_output.mlm_prediction_scores
         nsp_relationship_scores = model_output.nsp_relationship_scores
@@ -204,7 +211,7 @@ def evaluate(model, data_loader):
         end_loss = loss_fct(qa_end_logits, end_positions_labels)
         qa_loss = (start_loss + end_loss) / 2
 
-        total_loss = mlm_loss + torch.exp(nsp_loss) + qa_loss
+        total_loss = mlm_loss + torch.exp(nsp_loss) * qa_loss
 
         optim.zero_grad()  # 每次计算的时候需要把上次计算的梯度设置为0
 
@@ -231,9 +238,9 @@ def evaluate(model, data_loader):
 # 进行训练
 for epoch in range(epoch_size):  # 所有数据迭代总的次数
 
-    for return_batch_data in train_dataloader:  # 一个batch一个bach的训练完所有数据
+    for step, return_batch_data in enumerate(train_dataloader):  # 一个batch一个bach的训练完所有数据
         mask_input_ids, attention_masks, mask_input_labels, nsp_labels, start_positions_labels, end_positions_labels = return_batch_data
-        model_output = model(input_ids=mask_input_ids, attention_mask=attention_masks)
+        model_output = model(input_ids=mask_input_ids.to(device), attention_mask=attention_masks.to(device))
         config = model.config
         prediction_scores = model_output.mlm_prediction_scores
         nsp_relationship_scores = model_output.nsp_relationship_scores
@@ -261,12 +268,12 @@ for epoch in range(epoch_size):  # 所有数据迭代总的次数
         end_loss = loss_fct(qa_end_logits, end_positions_labels)
         qa_loss = (start_loss + end_loss) / 2
 
-        total_loss = mlm_loss + (torch.exp(nsp_loss) - 1) + qa_loss
+        total_loss = mlm_loss + torch.exp(nsp_loss) * qa_loss  # 目的是为了当nsp预测错了的时候 加大惩罚程度
 
         optim.zero_grad()  # 每次计算的时候需要把上次计算的梯度设置为0
 
         total_loss.backward()  # 反向传播
-        print(total_loss)
+        print("第%d个epoch的%d批数据的loss：%f"(epoch, step, total_loss))
 
         optim.step()  # 用来更新参数，也就是的w和b的参数更新操作
 
