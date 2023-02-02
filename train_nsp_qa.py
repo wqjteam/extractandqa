@@ -16,7 +16,7 @@ from PraticeOfTransformers.CustomModel import BertForUnionNspAndQA
 model_name = 'bert-base-chinese'
 tokenizer = AutoTokenizer.from_pretrained(model_name)
 model = BertForUnionNspAndQA.from_pretrained(model_name, num_labels=2)  # num_labels 测试用一下，看看参数是否传递
-batch_size = 2
+batch_size = 16
 epoch_size = 10
 # 用于梯度回归
 optim = AdamW(model.parameters(), lr=5e-5)  # 需要填写模型的参数
@@ -273,7 +273,7 @@ for epoch in range(epoch_size):  # 所有数据迭代总的次数
         optim.zero_grad()  # 每次计算的时候需要把上次计算的梯度设置为0
 
         total_loss.backward()  # 反向传播
-        print("第%d个epoch的%d批数据的loss：%f"(epoch, step, total_loss))
+        print("第%d个epoch的%d批数据的loss：%f",(epoch, step, total_loss))
 
         optim.step()  # 用来更新参数，也就是的w和b的参数更新操作
 
