@@ -11,12 +11,12 @@ from torch.optim import AdamW
 from transformers import AutoTokenizer
 
 from PraticeOfTransformers.DataCollatorForLanguageModelingSpecial import DataCollatorForLanguageModelingSpecial
-from PraticeOfTransformers.CustomModel import BertForUnionNspAndQA
+from PraticeOfTransformers.CustomModelForNSPQA import BertForUnionNspAndQA
 
 model_name = 'bert-base-chinese'
 tokenizer = AutoTokenizer.from_pretrained(model_name)
 model = BertForUnionNspAndQA.from_pretrained(model_name, num_labels=2)  # num_labels 测试用一下，看看参数是否传递
-batch_size = 16
+batch_size = 8
 epoch_size = 10
 # 用于梯度回归
 optim = AdamW(model.parameters(), lr=5e-5)  # 需要填写模型的参数
@@ -57,7 +57,7 @@ encoded_dict = tokenizer.batch_encode_plus(
     add_special_tokens=True,  # 添加 '[CLS]' 和 '[SEP]'
     max_length=128,  # 填充 & 截断长度
     truncation=True,
-    pad_to_max_length=True,
+    padding='longest',
     return_attention_mask=True,  # 返回 attn. masks.
 )
 
@@ -105,7 +105,7 @@ def create_batch(data, tokenizer, data_collator):
         add_special_tokens=True,  # 添加 '[CLS]' 和 '[SEP]'
         max_length=512,  # 填充 & 截断长度
         truncation=True,
-        pad_to_max_length=True,
+        padding='longest',
         return_attention_mask=True,  # 返回 attn. masks.
     )
     encoded_dict_keywords = tokenizer.batch_encode_plus(batch_text_or_text_pairs=keywords, add_special_tokens=False,
@@ -232,7 +232,7 @@ def evaluate(model, data_loader):
     model_precision.reset()
     model_f1.reset()
     model_recall.reset()
-    print("评估准确度: %.6f - 召回率: %.6f - f1得分: %.6f- 损失函数: %.6f" % (precision, recall, f1_score, total_loss))
+    print('评估准确度: %.6f - 召回率: %.6f - f1得分: %.6f- 损失函数: %.6f' % (precision, recall, f1_score, total_loss))
 
 
 # 进行训练
@@ -273,7 +273,7 @@ for epoch in range(epoch_size):  # 所有数据迭代总的次数
         optim.zero_grad()  # 每次计算的时候需要把上次计算的梯度设置为0
 
         total_loss.backward()  # 反向传播
-        print("第%d个epoch的%d批数据的loss：%f",(epoch, step, total_loss))
+        print('第%d个epoch的%d批数据的loss：%f'%(epoch, step, total_loss))
 
         optim.step()  # 用来更新参数，也就是的w和b的参数更新操作
 

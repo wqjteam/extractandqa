@@ -7,7 +7,7 @@ from torch.nn import CrossEntropyLoss
 from torch.optim import AdamW
 from transformers import AutoTokenizer
 import torch.utils.data as Data
-from PraticeOfTransformers.CustomModel import BertForUnionNspAndQA
+from PraticeOfTransformers.CustomModelForNSPQA import BertForUnionNspAndQA
 
 #这个token没变化过
 model_name = 'bert-base-chinese'

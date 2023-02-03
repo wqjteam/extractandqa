@@ -93,11 +93,13 @@ class NspAndQAModelOutput(ModelOutput):
 # 如果继承PreTrainedModel 需要实现 _init_weights(self, module) 方法
 # 如果继承BertPreTrainedModel 则不需要实现该方法
 class BertForUnionNspAndQA(BertPreTrainedModel):
-    config_class = NspAndQAConfig
 
+
+    #config_class = NspAndQAConfig   #可有可无 在from_pretrain 的时候就会默认加载，除非需要改变模型层数，基本册数之类的 之类的
     _keys_to_ignore_on_load_unexpected = [r"pooler"]
 
     def __init__(self, config):
+        # super(BertForUnionNspAndQA, self).__init__(config) 与 super().__init__(config) 二选一
         super().__init__(config)
         self.num_labels = config.num_labels
 
