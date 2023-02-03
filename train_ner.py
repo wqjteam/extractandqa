@@ -97,32 +97,6 @@ def create_batch(data, tokenizer, data_collator):
     mask_input_ids = data_collator_output["input_ids"]
 
     mask_input_labels = data_collator_output["labels"]  # 需要获取不是-100的位置，证明其未被替换，这也是target -100的位置在计算crossentropyloss 会丢弃
-    '''
-     进行遍历,获取原来的未被mask的数据,再对此进行对齐,方便后续会对此进行计算loss 在计算loss的时候 根据CrossEntropyLoss 的ingore_index 会根据target的属性，
-     直接去出某些值.不进行计算，所以不需要再进行转换
-    '''
-    '''
-    mask_input_postion_x, mask_input_postion_y = torch.where(
-        mask_input_labels != -100)  # 二维数据，结果分为2个array,按照15的% mask 每行都会有此呗mask
-    # mask_input_postion = torch.reshape(mask_input_postion_y, (mask_input_labels.shape[0], -1))  # -1表示不指定 自己去推测,所有的mask的数据必须等长，方便后续的loss使用矩阵计算
-    mask_input_postion_y=mask_input_postion_y.numpy() #转为np好计算，不然tensor 中套tensor
-    mask_input_postion=[]
-    mask_input_value=[]
-    forntindex=0
-    rearfront=0
-    rowindex=0
-    while(forntindex<len(mask_input_postion_x)):
-        while(forntindex<len(mask_input_postion_x) and mask_input_postion_x[forntindex] ==mask_input_postion_x[rearfront]):
-            forntindex+=1
-        #获取位置
-        y_index=list(mask_input_postion_y[rearfront:forntindex])
-        mask_input_postion.append(y_index)
-        mask_input_value.append([base_input_ids[rowindex].numpy()[colindex] for colindex in y_index])
-        rearfront=forntindex
-        rowindex+=1
-    mask_input_postion=pad_sequense_python(mask_input_postion,-1) #后续计算的时候对于-1不进行计算
-    mask_input_value=pad_sequense_python(mask_input_value,-1)
-     '''
 
     # 对于model只接受tensor[list] 必须为 list[tensor] 转为tensor[list]
     return mask_input_ids, torch.stack(
