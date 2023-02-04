@@ -175,6 +175,7 @@ class DataCollatorForLanguageModelingSpecial(DataCollatorMixin):
         index = 0
         find_all_index = []
         while (index < len(a)):
+            #当两个数组形式对比的时候，有一个为ndraay 需要用到.all() 如果是两个纯array则不需要
             if a[index] == b[0] and (index + len(b)) <= len(a) and (a[index:index + len(b)] == b[:]).all():
                 find_all_index.append((index, index + len(b)))
                 index += len(b)

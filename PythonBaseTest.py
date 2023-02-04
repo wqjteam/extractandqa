@@ -1,7 +1,12 @@
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.nn import CrossEntropyLoss
+from transformers import AutoTokenizer
+
+import CommonUtil
+from PraticeOfTransformers.DataCollatorForLanguageModelingSpecial import DataCollatorForLanguageModelingSpecial
 
 pred = torch.tensor([[0.0,10.0,0.0],[0.0,0.0,10.0]])
 
@@ -14,21 +19,41 @@ out = F.cross_entropy(pred, target)
 func = CrossEntropyLoss()  # 括号不要掉，定义一个对象
 out = func(pred, target)
 
-a=[1,1,1,1,5,10,1,2,3]
-b=[1,1]
-index=0
-find_all_index=[]
-while(index<len(a)):
-    if a[index]==b[0] and index+len(b)<=len(a) and a[index:index+len(b)]==b[:] :
-        find_all_index.append((index,index+len(b)))
-        index+=len(b)
-    else:
-        index+=1
+# a=[1,1,1,1,5,10,1,2,3]
+# b=[1,1]
+# index=0
+# find_all_index=[]
+# while(index<len(a)):
+#     if a[index]==b[0] and index+len(b)<=len(a) and a[index:index+len(b)]==b[:] :
+#         find_all_index.append((index,index+len(b)))
+#         index+=len(b)
+#     else:
+#         index+=1
+#
+# print(find_all_index)
 
-print(find_all_index)
+model_name = 'bert-base-chinese'
+tokenizer = AutoTokenizer.from_pretrained(model_name)
+
+sentence="长治市博物馆，位于长治市太行西街。1990年9月动工兴建新馆，1992年10月落成，占地面积13340平方米，建筑面积8200平方米"
+sentence="13340平"
+encoded_dict = tokenizer.encode_plus(
+    text=sentence,
+    # 输入文本,采用list[tuple(question,text)]的方式进行输入 zip 把两个list压成tuple的list对
+    add_special_tokens=True,  # 添加 '[CLS]' 和 '[SEP]'
+    max_length=128,  # 填充 & 截断长度
+    truncation=True,
+    padding='longest',
+    return_attention_mask=True,  # 返回 attn. masks.
+)
+aa=DataCollatorForLanguageModelingSpecial(tokenizer)
+aa.get_index_in_array(np.array([123,102,103]),[102,103])
+CommonUtil.get_first_index_in_array([123,102,103],[102,103])
 
 
-
-
-
+print(encoded_dict['input_ids'])
+print(sentence)
+print(''.join(tokenizer.convert_ids_to_tokens(encoded_dict['input_ids'])))
+print(len(sentence))
+print(len(encoded_dict['input_ids']))
 

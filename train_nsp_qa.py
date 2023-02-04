@@ -1,6 +1,7 @@
 ﻿# -*- coding: utf-8 -*-
 from functools import partial
 
+import numpy as np
 import pandas as pd
 import torch
 import torch.utils.data as Data
@@ -10,6 +11,7 @@ from torch.optim import AdamW
 
 from transformers import AutoTokenizer
 
+import CommonUtil
 from PraticeOfTransformers.DataCollatorForLanguageModelingSpecial import DataCollatorForLanguageModelingSpecial
 from PraticeOfTransformers.CustomModelForNSPQA import BertForUnionNspAndQA
 
@@ -22,7 +24,7 @@ epoch_size = 10
 optim = AdamW(model.parameters(), lr=5e-5)  # 需要填写模型的参数
 
 # model = BertForUnionNspAndQA.from_pretrained(model_name)
-print(model)
+# print(model)
 # data_collator = DataCollatorForLanguageModelingSpecial(tokenizer=tokenizer,
 #                                                              mlm=True,
 #                                                              mlm_probability=0.15,
@@ -38,8 +40,11 @@ data_collator = DataCollatorForLanguageModelingSpecial(tokenizer=tokenizer,
 '''
 passage_keyword_json = pd.read_json("./data/origin/intercontest/passage_qa_keyword_union_negate.json", orient='records',
                                     lines=True).drop("spos", axis=1)
-
+# passage_keyword_json['q_a'] 和 passage_keyword_json['q_a'].q_a 一样
 passage_keyword_json = passage_keyword_json[passage_keyword_json['q_a'].apply(lambda x: len(x) >= 1)]
+
+# passage_keyword_json = passage_keyword_json[passage_keyword_json.nsp == 0]
+# passage_keyword_json = passage_keyword_json[passage_keyword_json['sentence'].apply(lambda x: '长治市博物馆，' in x)]
 
 passage_keyword_json = passage_keyword_json.explode("q_a").values
 
@@ -80,26 +85,15 @@ def create_batch(data, tokenizer, data_collator):
 
     keywords = [kw[0] for kw in keyword]  # tuple 转为list 变成了双重的list 还是遍历转
     nsp_labels = []  # 用作判断两句是否相关
-    start_positions_labels = []  # 记录起始位置
-    end_positions_labels = []  # 记录终止始位置
-    for array_index, textstr in enumerate(text):
-        start_in = textstr.find(answers[array_index])
-        if start_in != -1 and nsps[array_index] == 1:  # 判断是否存在
-            nsp_labels.append(nsp_label_id.get(True))
-            start_positions_labels.append(start_in + 1)  # 因为在tokenizer.batch_encode_plus中转换的时候添加了cls
-            end_positions_labels.append(start_in + 1 + len(answers[array_index]))
-        else:
-            nsp_labels.append(nsp_label_id.get(False))
-            # 若找不到，则将start得位置 放在最末尾的位置 pad或者 [SEP]
-            start_positions_labels.append(
-                len(textstr))  # 应该是len(textstr) -1得 但是因为在tokenizer.batch_encode_plus中转换的时候添加了cls 所以就是len(textstr) -1 +1
-            end_positions_labels.append(len(textstr))
+    start_positions_labels = []  # 记录起始位置 需要在进行encode之后再进行添加
+    end_positions_labels = []  # 记录终止始位置 需要在进行encode之后再进行添加
 
     # start_positions = [q_a.get('start_position') for q_a in question_answer]
     # end_positions = [q_a.get('end_position') for q_a in question_answer]
     '''
     bert是双向的encode 所以qestion和text放在前面和后面区别不大
     '''
+
     encoded_dict_textandquestion = tokenizer.batch_encode_plus(
         batch_text_or_text_pairs=list(zip(text, questions)),  # 输入文本对 # 输入文本,采用list[tuple(text,question)]的方式进行输入
         add_special_tokens=True,  # 添加 '[CLS]' 和 '[SEP]'
@@ -108,11 +102,40 @@ def create_batch(data, tokenizer, data_collator):
         padding='longest',
         return_attention_mask=True,  # 返回 attn. masks.
     )
-    encoded_dict_keywords = tokenizer.batch_encode_plus(batch_text_or_text_pairs=keywords, add_special_tokens=False,
-                                                        # 添加 '[CLS]' 和 '[SEP]'
+    print(text)
+    print(''.join(tokenizer.convert_ids_to_tokens(encoded_dict_textandquestion['input_ids'][0])))
+    encoded_dict_keywords = tokenizer.batch_encode_plus(batch_text_or_text_pairs=keywords,
+                                                        add_special_tokens=False,  # 添加 '[CLS]' 和 '[SEP]'
                                                         pad_to_max_length=False,
                                                         return_attention_mask=False
                                                         )
+    '''
+    处理qa的问题
+    '''
+    encoded_dict_answers = tokenizer.batch_encode_plus(batch_text_or_text_pairs=answers,
+                                                       add_special_tokens=False,  # 添加 '[CLS]' 和 '[SEP]'
+                                                       pad_to_max_length=False,
+                                                       return_attention_mask=False
+                                                       )
+
+    for array_index, textstr in enumerate(encoded_dict_textandquestion['input_ids']):
+
+        start_in =CommonUtil.get_first_index_in_array(textstr,encoded_dict_answers['input_ids'][array_index]) #这方法在data_collator存在，不再重复写了
+        if start_in != -1 and nsps[array_index] == 1:  # 判断是否存在
+            nsp_labels.append(nsp_label_id.get(True))
+            start_positions_labels.append(start_in )  # 因为在tokenizer.batch_encode_plus中转换的时候添加了cls
+            end_positions_labels.append(start_in + 1 + len(answers[array_index]))
+        else:
+            nsp_labels.append(nsp_label_id.get(False))
+            # 若找不到，则将start得位置 放在最末尾的位置 padding 或者 [SEP]
+            print('---1--textstr:--' + str(len(textstr)) + '--a:-' + str(len(questions[array_index])) + '-b:-' + str(
+                len(textstr) + len(questions[array_index])))
+            # 应该是len(textstr) -1得 但是因为在tokenizer.batch_encode_plus中转换的时候添加了cls 所以就是len(textstr) -1 +1
+            sep_in = textstr.index( tokenizer.encode(text='[SEP]',    add_special_tokens=False)[0])
+            start_positions_labels.append(sep_in)
+            end_positions_labels.append(sep_in)
+
+
     base_input_ids = [torch.tensor(input_id) for input_id in encoded_dict_textandquestion['input_ids']]
     attention_masks = [torch.tensor(attention) for attention in encoded_dict_textandquestion['attention_mask']]
     # 传入的参数是tensor形式的input_ids，返回input_ids和label，label中-100的位置的词没有被mask
@@ -239,13 +262,16 @@ def evaluate(model, data_loader):
 for epoch in range(epoch_size):  # 所有数据迭代总的次数
 
     for step, return_batch_data in enumerate(train_dataloader):  # 一个batch一个bach的训练完所有数据
+
         mask_input_ids, attention_masks, mask_input_labels, nsp_labels, start_positions_labels, end_positions_labels = return_batch_data
+        print('---2--shape:-' + str(mask_input_ids.shape) + '---mask_input_ids---' + str(mask_input_ids))
+        print('---3--shape:--' + str(attention_masks.shape) + '--attention_masks---' + str(attention_masks))
         model_output = model(input_ids=mask_input_ids.to(device), attention_mask=attention_masks.to(device))
         config = model.config
-        prediction_scores = model_output.mlm_prediction_scores
-        nsp_relationship_scores = model_output.nsp_relationship_scores
-        qa_start_logits = model_output.qa_start_logits
-        qa_end_logits = model_output.qa_end_logits
+        prediction_scores = model_output.mlm_prediction_scores.to("cpu")
+        nsp_relationship_scores = model_output.nsp_relationship_scores.to("cpu")
+        qa_start_logits = model_output.qa_start_logits.to("cpu")
+        qa_end_logits = model_output.qa_end_logits.to("cpu")
 
         '''
         loss的计算
@@ -264,6 +290,8 @@ for epoch in range(epoch_size):  # 所有数据迭代总的次数
         '''
         qa loss 计算
         '''
+        print('---4-----对应的shape---' + str(qa_start_logits.shape) + '---位置：----' + str(
+            start_positions_labels) + '-------------')
         start_loss = loss_fct(qa_start_logits, start_positions_labels)
         end_loss = loss_fct(qa_end_logits, end_positions_labels)
         qa_loss = (start_loss + end_loss) / 2
@@ -273,7 +301,7 @@ for epoch in range(epoch_size):  # 所有数据迭代总的次数
         optim.zero_grad()  # 每次计算的时候需要把上次计算的梯度设置为0
 
         total_loss.backward()  # 反向传播
-        print('第%d个epoch的%d批数据的loss：%f'%(epoch, step, total_loss))
+        print('第%d个epoch的%d批数据的loss：%f' % (epoch, step, total_loss))
 
         optim.step()  # 用来更新参数，也就是的w和b的参数更新操作
 
