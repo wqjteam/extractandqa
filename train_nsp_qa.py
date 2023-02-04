@@ -18,7 +18,7 @@ from PraticeOfTransformers.CustomModelForNSPQA import BertForUnionNspAndQA
 model_name = 'bert-base-chinese'
 tokenizer = AutoTokenizer.from_pretrained(model_name)
 model = BertForUnionNspAndQA.from_pretrained(model_name, num_labels=2)  # num_labels 测试用一下，看看参数是否传递
-batch_size = 8
+batch_size = 4
 epoch_size = 10
 # 用于梯度回归
 optim = AdamW(model.parameters(), lr=5e-5)  # 需要填写模型的参数
@@ -102,8 +102,7 @@ def create_batch(data, tokenizer, data_collator):
         padding='longest',
         return_attention_mask=True,  # 返回 attn. masks.
     )
-    print(text)
-    print(''.join(tokenizer.convert_ids_to_tokens(encoded_dict_textandquestion['input_ids'][0])))
+
     encoded_dict_keywords = tokenizer.batch_encode_plus(batch_text_or_text_pairs=keywords,
                                                         add_special_tokens=False,  # 添加 '[CLS]' 和 '[SEP]'
                                                         pad_to_max_length=False,
@@ -128,8 +127,7 @@ def create_batch(data, tokenizer, data_collator):
         else:
             nsp_labels.append(nsp_label_id.get(False))
             # 若找不到，则将start得位置 放在最末尾的位置 padding 或者 [SEP]
-            print('---1--textstr:--' + str(len(textstr)) + '--a:-' + str(len(questions[array_index])) + '-b:-' + str(
-                len(textstr) + len(questions[array_index])))
+
             # 应该是len(textstr) -1得 但是因为在tokenizer.batch_encode_plus中转换的时候添加了cls 所以就是len(textstr) -1 +1
             sep_in = textstr.index( tokenizer.encode(text='[SEP]',    add_special_tokens=False)[0])
             start_positions_labels.append(sep_in)
@@ -264,8 +262,7 @@ for epoch in range(epoch_size):  # 所有数据迭代总的次数
     for step, return_batch_data in enumerate(train_dataloader):  # 一个batch一个bach的训练完所有数据
 
         mask_input_ids, attention_masks, mask_input_labels, nsp_labels, start_positions_labels, end_positions_labels = return_batch_data
-        print('---2--shape:-' + str(mask_input_ids.shape) + '---mask_input_ids---' + str(mask_input_ids))
-        print('---3--shape:--' + str(attention_masks.shape) + '--attention_masks---' + str(attention_masks))
+
         model_output = model(input_ids=mask_input_ids.to(device), attention_mask=attention_masks.to(device))
         config = model.config
         prediction_scores = model_output.mlm_prediction_scores.to("cpu")
@@ -290,8 +287,6 @@ for epoch in range(epoch_size):  # 所有数据迭代总的次数
         '''
         qa loss 计算
         '''
-        print('---4-----对应的shape---' + str(qa_start_logits.shape) + '---位置：----' + str(
-            start_positions_labels) + '-------------')
         start_loss = loss_fct(qa_start_logits, start_positions_labels)
         end_loss = loss_fct(qa_end_logits, end_positions_labels)
         qa_loss = (start_loss + end_loss) / 2
