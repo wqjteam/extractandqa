@@ -5,7 +5,7 @@ import torch
 from torch import nn
 from torchvision.models.resnet import BasicBlock, Bottleneck
 from transformers import PretrainedConfig, PreTrainedModel, BertModel, BertPreTrainedModel
-from torchcrf import CRF
+from pytorchcrf import CRF
 # 在编写自己的配置时，需要记住以下三点:
 # https://blog.csdn.net/wwlsm_zql/article/details/123822539
 # 你必须继承 PretrainedConfig,
@@ -45,11 +45,11 @@ class BertForNerAppendBiLstmAndCrf(BertPreTrainedModel):
         self.bert = BertModel(config)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
         self.bilstm = nn.LSTM(
-            input_size=config.lstm_embedding_size,  # 1024
+            input_size=config.pooler_fc_size,  # 和bert的输出曾 也是就pool保存一直
             hidden_size=config.hidden_size // 2,  # 1024
             batch_first=True,
             num_layers=2,
-            dropout=config.lstm_dropout_prob,  # 0.5
+            dropout=0.5,  # 0.5
             bidirectional=True #双向
         )
         self.classifier = nn.Linear(config.hidden_size, config.num_labels)

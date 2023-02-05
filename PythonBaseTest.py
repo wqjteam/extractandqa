@@ -47,8 +47,7 @@ encoded_dict = tokenizer.encode_plus(
     return_attention_mask=True,  # 返回 attn. masks.
 )
 aa=DataCollatorForLanguageModelingSpecial(tokenizer)
-aa.get_index_in_array(np.array([123,102,103]),[102,103])
-CommonUtil.get_first_index_in_array([123,102,103],[102,103])
+
 
 
 print(encoded_dict['input_ids'])

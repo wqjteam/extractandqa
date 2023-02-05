@@ -7,7 +7,7 @@ import torch
 import torch.utils.data as Data
 import torchmetrics
 from torch.nn import CrossEntropyLoss
-from torch.optim import AdamW
+from torch.optim import AdamW, Adam
 
 from transformers import AutoTokenizer
 
@@ -19,9 +19,9 @@ model_name = 'bert-base-chinese'
 tokenizer = AutoTokenizer.from_pretrained(model_name)
 model = BertForUnionNspAndQA.from_pretrained(model_name, num_labels=2)  # num_labels 测试用一下，看看参数是否传递
 batch_size = 4
-epoch_size = 10
+epoch_size = 1000
 # 用于梯度回归
-optim = AdamW(model.parameters(), lr=5e-5)  # 需要填写模型的参数
+optim = Adam(model.parameters(), lr=5e-5)  # 需要填写模型的参数
 
 # model = BertForUnionNspAndQA.from_pretrained(model_name)
 # print(model)
@@ -291,7 +291,7 @@ for epoch in range(epoch_size):  # 所有数据迭代总的次数
         end_loss = loss_fct(qa_end_logits, end_positions_labels)
         qa_loss = (start_loss + end_loss) / 2
 
-        total_loss = mlm_loss + torch.exp(nsp_loss) * qa_loss  # 目的是为了当nsp预测错了的时候 加大惩罚程度
+        total_loss =   torch.sqrt(torch.exp(nsp_loss)) * qa_loss  # 目的是为了当nsp预测错了的时候 加大惩罚程度
 
         optim.zero_grad()  # 每次计算的时候需要把上次计算的梯度设置为0
 
