@@ -94,7 +94,7 @@ def tokenize_and_align_labels(examples):
     return tokenized_inputs
 
 
-tokenized_datasets = datasets.map(tokenize_and_align_labels, batched=True)
+tokenized_datasets = datasets.map(tokenize_and_align_labels, batched=True,remove_columns=datasets["train"].column_names,).data
 # 数据收集器，用于将处理好的数据输入给模型
 data_collator = DataCollatorForTokenClassification(tokenizer)   # 他会对于一些label的空余的位置进行补齐 对于data_collator输入必须有labels属性
 a=data_collator(tokenized_datasets)
