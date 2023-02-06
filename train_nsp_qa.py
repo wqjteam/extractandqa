@@ -8,7 +8,7 @@ import torch.utils.data as Data
 import torchmetrics
 from torch.nn import CrossEntropyLoss
 from torch.optim import AdamW, Adam
-
+from visdom import Visdom
 from transformers import AutoTokenizer, DataCollatorForLanguageModeling
 
 import CommonUtil
@@ -25,10 +25,10 @@ optim = Adam(model.parameters(), lr=5e-5)  # 需要填写模型的参数
 
 # model = BertForUnionNspAndQA.from_pretrained(model_name)
 # print(model)
-data_collator = DataCollatorForLanguageModeling(tokenizer=tokenizer,
-                                                             mlm=True,
-                                                             mlm_probability=0.15,
-                                                             return_tensors="pt")
+# data_collator = DataCollatorForLanguageModeling(tokenizer=tokenizer,
+#                                                              mlm=True,
+#                                                              mlm_probability=0.15,
+#                                                              return_tensors="pt")
 
 data_collator = DataCollatorForLanguageModelingSpecial(tokenizer=tokenizer,
                                                        mlm=True,
@@ -255,7 +255,8 @@ def evaluate(model, data_loader):
     model_recall.reset()
     print('评估准确度: %.6f - 召回率: %.6f - f1得分: %.6f- 损失函数: %.6f' % (precision, recall, f1_score, total_loss))
 
-
+viz = Visdom() #可视化
+viz.line([0.], [0.], win="train loss", opts=dict(title='train_loss')) #绘制起始位置
 # 进行训练
 for epoch in range(epoch_size):  # 所有数据迭代总的次数
 
@@ -297,7 +298,8 @@ for epoch in range(epoch_size):  # 所有数据迭代总的次数
 
         total_loss.backward()  # 反向传播
         print('第%d个epoch的%d批数据的loss：%f' % (epoch, step, total_loss))
-
+        # numpy不可以直接在有梯度的数据上获取，需要先去除梯度
+        viz.line([total_loss.detach()], [step], win="train loss", update='append') # 绘制epoch以及对应的测试集损失loss 第一个参数是y  第二个是x
         optim.step()  # 用来更新参数，也就是的w和b的参数更新操作
 
 torch.save(model.state_dict(), "save_model/path1")
