@@ -9,7 +9,7 @@ import torchmetrics
 from torch.nn import CrossEntropyLoss
 from torch.optim import AdamW, Adam
 
-from transformers import AutoTokenizer
+from transformers import AutoTokenizer, DataCollatorForLanguageModeling
 
 import CommonUtil
 from PraticeOfTransformers.DataCollatorForLanguageModelingSpecial import DataCollatorForLanguageModelingSpecial
@@ -25,10 +25,10 @@ optim = Adam(model.parameters(), lr=5e-5)  # 需要填写模型的参数
 
 # model = BertForUnionNspAndQA.from_pretrained(model_name)
 # print(model)
-# data_collator = DataCollatorForLanguageModelingSpecial(tokenizer=tokenizer,
-#                                                              mlm=True,
-#                                                              mlm_probability=0.15,
-#                                                              return_tensors="pt")
+data_collator = DataCollatorForLanguageModeling(tokenizer=tokenizer,
+                                                             mlm=True,
+                                                             mlm_probability=0.15,
+                                                             return_tensors="pt")
 
 data_collator = DataCollatorForLanguageModelingSpecial(tokenizer=tokenizer,
                                                        mlm=True,

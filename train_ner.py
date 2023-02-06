@@ -9,7 +9,7 @@ import torch.utils.data as Data
 
 from PraticeOfTransformers import CustomModelForNer
 from PraticeOfTransformers.CustomModelForNSPQA import BertForUnionNspAndQA
-from datasets import load_dataset, load_metric
+from datasets import load_dataset
 
 from PraticeOfTransformers.CustomModelForNer import BertForNerAppendBiLstmAndCrf
 
@@ -49,8 +49,10 @@ nsp_id_label = {1: True, 0: False}
 nsp_label_id = {True: 1, False: 0}
 
 # 加载conll2003数据集
-datasets = load_dataset("conll2003")
-example = datasets["train"][4]
+
+dataset = load_dataset("rotten_tomatoes", split="train")
+dataset = load_dataset('conll2003')
+example = dataset["train"][4]
 task='ner'
 label_all_tokens = True
 
