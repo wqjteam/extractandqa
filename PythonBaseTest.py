@@ -2,8 +2,9 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torch import tensor
 from torch.nn import CrossEntropyLoss
-from transformers import AutoTokenizer
+from transformers import AutoTokenizer, DataCollatorForLanguageModeling, DataCollatorForTokenClassification
 
 import CommonUtil
 from PraticeOfTransformers.DataCollatorForLanguageModelingSpecial import DataCollatorForLanguageModelingSpecial
@@ -46,11 +47,13 @@ encoded_dict = tokenizer.encode_plus(
     padding='longest',
     return_attention_mask=True,  # 返回 attn. masks.
 )
-aa=DataCollatorForLanguageModelingSpecial(tokenizer)
+# lmtokener=DataCollatorForLanguageModeling(tokenizer)
+lmtokener=DataCollatorForTokenClassification(tokenizer)
+input=[{'input_ids':encoded_dict['input_ids'],'token_type_ids':encoded_dict['token_type_ids'],'labels':encoded_dict['attention_mask']} ]
+aa=lmtokener(input)
 
 
 
-print(encoded_dict['input_ids'])
 print(sentence)
 print(''.join(tokenizer.convert_ids_to_tokens(encoded_dict['input_ids'])))
 print(len(sentence))

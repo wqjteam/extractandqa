@@ -56,10 +56,10 @@ class BertForNerAppendBiLstmAndCrf(BertPreTrainedModel):
 
         self.init_weights()
 
-    def forward(self, input_data, token_type_ids=None, attention_mask=None, labels=None,
+    def forward(self, input_ids, token_type_ids=None, attention_mask=None, labels=None,
                 position_ids=None, inputs_embeds=None, head_mask=None):
-        input_ids, input_token_starts = input_data
-        outputs = self.bert(input_ids,
+
+        outputs = self.bert(input_ids=input_ids,
                             attention_mask=attention_mask,
                             token_type_ids=token_type_ids,
                             position_ids=position_ids,
@@ -67,16 +67,12 @@ class BertForNerAppendBiLstmAndCrf(BertPreTrainedModel):
                             inputs_embeds=inputs_embeds)
         sequence_output = outputs[0]
 
-        # 去除[CLS]标签等位置，获得与label对齐的pre_label表示
-        origin_sequence_output = [layer[starts.nonzero().squeeze(1)]
-                                  for layer, starts in zip(sequence_output, input_token_starts)]
-        # 将sequence_output的pred_label维度padding到最大长度
-        padded_sequence_output = nn.pad_sequence(origin_sequence_output, batch_first=True)
+
         # dropout pred_label的一部分feature
-        padded_sequence_output = self.dropout(padded_sequence_output)
-        lstm_output, _ = self.bilstm(padded_sequence_output)
+        lstm_output, _ = self.bilstm(sequence_output)
+        padded_sequence_output = self.dropout(lstm_output)
         # 得到判别值
-        logits = self.classifier(lstm_output)
+        logits = self.classifier(padded_sequence_output)
         outputs = (logits,)
         if labels is not None:
             loss_mask = labels.gt(-1)
@@ -85,3 +81,14 @@ class BertForNerAppendBiLstmAndCrf(BertPreTrainedModel):
 
         # contain: (loss), scores
         return outputs
+
+    def decode(self, input_ids, attention_mask, segment_ids):
+        embeds = self.bert(input_ids, attention_mask=attention_mask, token_type_ids=segment_ids)[0]
+        lstm_out, _ = self.lstm(embeds)
+        lstm_out = self.dropout(lstm_out)
+        lstm_out = self.fc(lstm_out)
+        results = self.crf.decode(lstm_out)
+        result_tensor = []
+        for result in results:
+            result_tensor.append(torch.tensor(result))
+        return torch.stack(result_tensor)

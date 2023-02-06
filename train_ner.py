@@ -52,7 +52,7 @@ nsp_label_id = {True: 1, False: 0}
 
 
 nerdataset = load_dataset('conll2003')
-example = nerdataset["train"][4]
+nerdataset = nerdataset["train"]
 task='ner'
 label_all_tokens = True
 
@@ -96,10 +96,15 @@ def tokenize_and_align_labels(examples):
     return tokenized_inputs
 
 
-tokenized_datasets = nerdataset.map(tokenize_and_align_labels, batched=True,remove_columns=nerdataset["train"].column_names,).data
+tokenized_datasets = nerdataset.map(tokenize_and_align_labels, batched=True,remove_columns=["id", "tokens", "pos_tags", "chunk_tags", "ner_tags"])
+tokenized_datasets=[a  for a in tokenized_datasets]
 # 数据收集器，用于将处理好的数据输入给模型
 data_collator = DataCollatorForTokenClassification(tokenizer)   # 他会对于一些label的空余的位置进行补齐 对于data_collator输入必须有labels属性
-a=data_collator(tokenized_datasets)
+
+# 看是否用cpu或者gpu训练
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+print("-----------------------------------训练模式为%s------------------------------------" % device)
+model.to(device)
 
 def create_batch(data, tokenizer, data_collator):
     text, question_answer, keyword, nsp = zip(*data)  # arrat的四列 转为tuple
@@ -154,9 +159,21 @@ create_batch_partial = partial(create_batch, tokenizer=tokenizer, data_collator=
 
 # batch_size 除以2是为了 在后面认为添加了负样本   负样本和正样本是1：1
 train_dataloader = Data.DataLoader(
-    train_data, shuffle=True, collate_fn=create_batch_partial, batch_size=batch_size
+    tokenized_datasets, shuffle=True, collate_fn=data_collator, batch_size=batch_size
 )
 
-dev_dataloader = Data.DataLoader(
-    dev_data, shuffle=True, collate_fn=create_batch_partial, batch_size=batch_size
-)
+for epoch in range(epoch_size):  # 所有数据迭代总的次数
+
+    for step, return_batch_data in enumerate(train_dataloader):  # 一个batch一个bach的训练完所有数据
+
+        input_ids=return_batch_data['input_ids']
+        token_type_ids=return_batch_data['token_type_ids']
+        attention_masks=return_batch_data['attention_mask']
+        labels = return_batch_data['labels']
+
+        model_output = model(input_ids.to(device), attention_mask=attention_masks.to(device),labels=labels)
+        config = model.config
+        prediction_scores = model_output.mlm_prediction_scores.to("cpu")
+        nsp_relationship_scores = model_output.nsp_relationship_scores.to("cpu")
+        qa_start_logits = model_output.qa_start_logits.to("cpu")
+        qa_end_logits = model_output.qa_end_logits.to("cpu")
