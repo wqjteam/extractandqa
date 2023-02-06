@@ -7,7 +7,6 @@ from torchvision.models.resnet import BasicBlock, Bottleneck
 from transformers import PretrainedConfig, PreTrainedModel, BertModel, BertPreTrainedModel
 from pytorchcrf import CRF
 # 在编写自己的配置时，需要记住以下三点:
-# https://blog.csdn.net/wwlsm_zql/article/details/123822539
 # 你必须继承 PretrainedConfig,
 # 你的 PretrainedConfig 的_init 必须接受任何 kwargs,
 # 这些 kwargs 需要传递给超类 init。
