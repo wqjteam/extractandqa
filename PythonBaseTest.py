@@ -4,10 +4,12 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch import tensor
 from torch.nn import CrossEntropyLoss
-from transformers import AutoTokenizer, DataCollatorForLanguageModeling, DataCollatorForTokenClassification
+from transformers import AutoTokenizer, DataCollatorForLanguageModeling, DataCollatorForTokenClassification, \
+    DataCollatorForWholeWordMask
 
 import CommonUtil
 from PraticeOfTransformers.DataCollatorForLanguageModelingSpecial import DataCollatorForLanguageModelingSpecial
+from PraticeOfTransformers.DataCollatorForWholeWordMaskSpecial import DataCollatorForWholeWordMaskSpecial
 
 pred = torch.tensor([[0.0,10.0,0.0],[0.0,0.0,10.0]])
 
@@ -37,7 +39,7 @@ model_name = 'bert-base-chinese'
 tokenizer = AutoTokenizer.from_pretrained(model_name)
 
 sentence="长治市博物馆，位于长治市太行西街。1990年9月动工兴建新馆，1992年10月落成，占地面积13340平方米，建筑面积8200平方米"
-sentence="13340平"
+sentence="13340平方米，建筑面积位于长治市太行西街"
 encoded_dict = tokenizer.encode_plus(
     text=sentence,
     # 输入文本,采用list[tuple(question,text)]的方式进行输入 zip 把两个list压成tuple的list对
@@ -47,15 +49,23 @@ encoded_dict = tokenizer.encode_plus(
     padding='longest',
     return_attention_mask=True,  # 返回 attn. masks.
 )
-# lmtokener=DataCollatorForLanguageModeling(tokenizer)
-lmtokener=DataCollatorForTokenClassification(tokenizer)
-input=[{'input_ids':encoded_dict['input_ids'],'token_type_ids':encoded_dict['token_type_ids'],'labels':encoded_dict['attention_mask']} ]
+# lmtokener=DataCollatorForWholeWordMask(tokenizer=tokenizer,
+#                                                        mlm=True,
+#                                                        mlm_probability=0.15,
+#                                                        return_tensors="pt")
+lmtokener=DataCollatorForWholeWordMaskSpecial(tokenizer=tokenizer,
+                                                       mlm=True,
+                                                       mlm_probability=0.55,
+                                                       return_tensors="pt")
+# lmtokener=DataCollatorForTokenClassification(tokenizer)
+# input=[{'input_ids':encoded_dict['input_ids'],'token_type_ids':encoded_dict['token_type_ids'],'labels':encoded_dict['attention_mask']} ]
+input=[encoded_dict['input_ids']]
 aa=lmtokener(input)
 
 
 
-print(sentence)
-print(''.join(tokenizer.convert_ids_to_tokens(encoded_dict['input_ids'])))
+print(aa)
+print(tokenizer.convert_ids_to_tokens(encoded_dict['input_ids']))
 print(len(sentence))
 print(len(encoded_dict['input_ids']))
 

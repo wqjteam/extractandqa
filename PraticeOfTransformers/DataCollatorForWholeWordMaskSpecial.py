@@ -1,16 +1,33 @@
 ﻿# -*- coding: utf-8 -*-
+import random
 import warnings
 from dataclasses import dataclass
-from random import random
+
 from typing import Any, Optional, Tuple, Mapping, List, Union, Dict
 
 import numpy as np
 from transformers import PreTrainedTokenizerBase, BertTokenizer, BertTokenizerFast
-from transformers.data.data_collator import DataCollatorMixin, tolist
+from transformers.data.data_collator import DataCollatorMixin, tolist, DataCollatorForLanguageModeling
+
+from PraticeOfTransformers.DataCollatorForLanguageModelingSpecial import DataCollatorForLanguageModelingSpecial
 
 
 @dataclass
-class DataCollatorForWholeWordMaskSpecial(DataCollatorMixin):
+class DataCollatorForWholeWordMaskSpecial(DataCollatorForLanguageModelingSpecial):
+    """
+    Data collator used for language modeling that masks entire words.
+
+    - collates batches of tensors, honoring their tokenizer's pad_token
+    - preprocesses batches for masked language modeling
+
+    <Tip>
+
+    This collator relies on details of the implementation of subword tokenization by [`BertTokenizer`], specifically
+    that subword tokens are prefixed with *##*. For tokenizers that do not adhere to this scheme, this collator will
+    produce an output that is roughly equivalent to [`.DataCollatorForLanguageModeling`].
+
+    </Tip>"""
+
     """
         Data collator used for language modeling that masks entire words.
 
@@ -26,13 +43,17 @@ class DataCollatorForWholeWordMaskSpecial(DataCollatorMixin):
         </Tip>"""
 
     def torch_call(self, examples: List[Union[List[int], Any, Dict[str, Any]]]) -> Dict[str, Any]:
+        examples,kyewords=list(zip(*examples))  #更改过源码，进行mask的时候已经变成list（tuple（））
+        examples=list(examples) #更改过源码 转为list
+        kyewords=list(kyewords) #更改过源码 转为list
+
         if isinstance(examples[0], Mapping):
             input_ids = [e["input_ids"] for e in examples]
         else:
             input_ids = examples
             examples = [{"input_ids": e} for e in examples]
 
-        batch_input = self._torch_collate_batch(input_ids, self.tokenizer, pad_to_multiple_of=self.pad_to_multiple_of)
+        batch_input = self._torch_collate_batch(examples=input_ids, tokenizer=self.tokenizer, pad_to_multiple_of=self.pad_to_multiple_of)
 
         mask_labels = []
         for e in examples:
@@ -49,7 +70,8 @@ class DataCollatorForWholeWordMaskSpecial(DataCollatorMixin):
                     if i in ref_pos:
                         ref_tokens[i] = "##" + ref_tokens[i]
             mask_labels.append(self._whole_word_mask(ref_tokens))
-        batch_mask = self._torch_collate_batch(mask_labels, self.tokenizer, pad_to_multiple_of=self.pad_to_multiple_of)
+        #对于subword的单词及逆行mask
+        batch_mask = self._torch_collate_batch(examples=mask_labels, tokenizer=self.tokenizer, pad_to_multiple_of=self.pad_to_multiple_of)
         inputs, labels = self.torch_mask_tokens(batch_input, batch_mask)
         return {"input_ids": inputs, "labels": labels}
 
@@ -161,4 +183,39 @@ class DataCollatorForWholeWordMaskSpecial(DataCollatorMixin):
                 else:
                     index += 1
             return find_all_index
+
+    def _torch_collate_batch(self,examples, tokenizer, pad_to_multiple_of: Optional[int] = None):
+        """Collate `examples` into a batch, using the information in `tokenizer` for padding if necessary."""
+        import torch
+
+        # Tensorize if necessary.
+        if isinstance(examples[0], (list, tuple, np.ndarray)):
+            examples = [torch.tensor(e, dtype=torch.long) for e in examples]
+
+        length_of_first = examples[0].size(0)
+
+        # Check if padding is necessary.
+
+        are_tensors_same_length = all(x.size(0) == length_of_first for x in examples)
+        if are_tensors_same_length and (pad_to_multiple_of is None or length_of_first % pad_to_multiple_of == 0):
+            return torch.stack(examples, dim=0)
+
+        # If yes, check if we have a `pad_token`.
+        if tokenizer._pad_token is None:
+            raise ValueError(
+                "You are attempting to pad samples but the tokenizer you are using"
+                f" ({tokenizer.__class__.__name__}) does not have a pad token."
+            )
+
+        # Creating the full tensor and filling it with our data.
+        max_length = max(x.size(0) for x in examples)
+        if pad_to_multiple_of is not None and (max_length % pad_to_multiple_of != 0):
+            max_length = ((max_length // pad_to_multiple_of) + 1) * pad_to_multiple_of
+        result = examples[0].new_full([len(examples), max_length], tokenizer.pad_token_id)
+        for i, example in enumerate(examples):
+            if tokenizer.padding_side == "right":
+                result[i, : example.shape[0]] = example
+            else:
+                result[i, -example.shape[0]:] = example
+        return result
 

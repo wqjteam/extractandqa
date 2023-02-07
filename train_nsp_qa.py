@@ -14,6 +14,7 @@ from transformers import AutoTokenizer, DataCollatorForLanguageModeling
 import CommonUtil
 from PraticeOfTransformers.DataCollatorForLanguageModelingSpecial import DataCollatorForLanguageModelingSpecial
 from PraticeOfTransformers.CustomModelForNSPQA import BertForUnionNspAndQA
+from PraticeOfTransformers.DataCollatorForWholeWordMaskSpecial import DataCollatorForWholeWordMaskSpecial
 
 model_name = 'bert-base-chinese'
 tokenizer = AutoTokenizer.from_pretrained(model_name)
@@ -31,6 +32,11 @@ optim = Adam(model.parameters(), lr=5e-5)  # 需要填写模型的参数
 #                                                              return_tensors="pt")
 
 data_collator = DataCollatorForLanguageModelingSpecial(tokenizer=tokenizer,
+                                                       mlm=True,
+                                                       mlm_probability=0.15,
+                                                       return_tensors="pt")
+
+data_collator = DataCollatorForWholeWordMaskSpecial(tokenizer=tokenizer,
                                                        mlm=True,
                                                        mlm_probability=0.15,
                                                        return_tensors="pt")
