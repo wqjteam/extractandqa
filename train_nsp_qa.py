@@ -204,18 +204,23 @@ model.to(device)
 
 
 #  评估函数，用作训练一轮，评估一轮使用
-def evaluate(model, data_loader):
+def evaluate(model, eval_data_loader,epoch):
+    eval_mlm_loss = 0
+    eval_nsp_loss = 0
+    eval_qa_loss = 0
+    eval_total_loss = 0
+    eval_step=0
     # 依次处理每批数据
-    for return_batch_data in train_dataloader:  # 一个batch一个bach的训练完所有数据
-        mask_input_ids, mask_input_labels, nsp_labels, start_positions_labels, end_positions_labels = return_batch_data
+    for return_batch_data in eval_data_loader:  # 一个batch一个bach的训练完所有数据
+        mask_input_ids, attention_masks, mask_input_labels, nsp_labels, start_positions_labels, end_positions_labels = return_batch_data
         model_output = model(input_ids=mask_input_ids.to(device), attention_mask=attention_masks.to(device))
-        # 进行转换
 
+        # 进行转换
         config = model.config
-        prediction_scores = model_output.mlm_prediction_scores
-        nsp_relationship_scores = model_output.nsp_relationship_scores
-        qa_start_logits = model_output.qa_start_logits
-        qa_end_logits = model_output.qa_end_logits
+        prediction_scores = model_output.mlm_prediction_scores.to("cpu")
+        nsp_relationship_scores = model_output.nsp_relationship_scores.to("cpu")
+        qa_start_logits = model_output.qa_start_logits.to("cpu")
+        qa_end_logits = model_output.qa_end_logits.to("cpu")
 
         '''
         loss的计算
@@ -243,29 +248,39 @@ def evaluate(model, data_loader):
         optim.zero_grad()  # 每次计算的时候需要把上次计算的梯度设置为0
 
         total_loss.backward()  # 反向传播
-        print(total_loss)
+        # print(total_loss)
 
         optim.step()  # 用来更新参数，也就是的w和b的参数更新操作
         # 损失函数的平均值
 
         # 按照概率最大原则，计算单字的标签编号
         # argmax计算logits中最大元素值的索引，从0开始
-
+        #进行统计展示
+        eval_step+=1
+        eval_mlm_loss+=mlm_loss.detach()
+        eval_nsp_loss+=nsp_loss.detach()
+        eval_qa_loss+=qa_loss.detach()
+        eval_total_loss+=total_loss.detach()
     f1_score = model_f1.compute()
     recall = model_recall.compute()
     precision = model_precision.compute()
-
+    viz.line(Y=[(eval_mlm_loss/eval_step, eval_nsp_loss/eval_step, eval_qa_loss/eval_step, eval_total_loss/eval_step)],
+             X=[(epoch+1, epoch+1, epoch+1, epoch+1)], win="pitcure_2", update='append')
     # 清空计算对象
     model_precision.reset()
     model_f1.reset()
     model_recall.reset()
-    print('评估准确度: %.6f - 召回率: %.6f - f1得分: %.6f- 损失函数: %.6f' % (precision, recall, f1_score, total_loss))
+    print('--eval--准确度: %.6f - 召回率: %.6f - f1得分: %.6f- 损失函数: %.6f' % (precision, recall, f1_score, total_loss))
 
 
-viz = Visdom()  # 可视化
+viz = Visdom(env=u'origin_train')  # 可视化
 name = ['mlm_loss', 'nsp_loss', 'qa_loss', 'total_loss']
-viz.line(Y=[(0., 0., 0., 0.)], X=[(0., 0., 0., 0.)], win="train loss",
-         opts=dict(title='train_loss', legend=name, markers=False))  # 绘制起始位置
+viz.line(Y=[(0., 0., 0., 0.)], X=[(0., 0., 0., 0.)], win="pitcure_1",
+         opts=dict(title='train_loss', legend=name, markers=False))  # 绘制起始位置 #win指的是图形id
+viz.line(Y=[(0., 0., 0., 0.)], X=[(0., 0., 0., 0.)], win="pitcure_2",
+         opts=dict(title='eval_loss', legend=name, markers=False))  # 绘制起始位置
+
+
 # 进行训练
 for epoch in range(epoch_size):  # 所有数据迭代总的次数
     epoch_mlm_loss = 0
@@ -319,10 +334,15 @@ for epoch in range(epoch_size):  # 所有数据迭代总的次数
         total_loss.backward()  # 反向传播
         print('第%d个epoch的%d批数据的loss：%f' % (epoch+1, step+1, total_loss))
 
-        optim.step()  # 用来更新参数，也就是的w和b的参数更新操作
+
 
     # numpy不可以直接在有梯度的数据上获取，需要先去除梯度
     # 绘制epoch以及对应的测试集损失loss 第一个参数是y  第二个是x
     viz.line(Y=[(epoch_mlm_loss/epoch_step, epoch_nsp_loss/epoch_step, epoch_qa_loss/epoch_step, epoch_total_loss/epoch_step)],
-             X=[(epoch+1, epoch+1, epoch+1, epoch+1)], win="train loss", update='append')
+             X=[(epoch+1, epoch+1, epoch+1, epoch+1)], win="pitcure_1", update='append')
+
+    #绘制评估函数相关数据
+    evaluate(model,dev_dataloader,epoch)
+
+    optim.step()  # 用来更新参数，也就是的w和b的参数更新操作
 torch.save(model.state_dict(), "save_model/path1")
