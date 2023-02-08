@@ -19,7 +19,7 @@ from PraticeOfTransformers.DataCollatorForWholeWordMaskSpecial import DataCollat
 model_name = 'bert-base-chinese'
 tokenizer = AutoTokenizer.from_pretrained(model_name)
 model = BertForUnionNspAndQA.from_pretrained(model_name, num_labels=2)  # num_labels 测试用一下，看看参数是否传递
-batch_size = 2
+batch_size = 4
 epoch_size = 1000
 # 用于梯度回归
 optim = Adam(model.parameters(), lr=5e-5)  # 需要填写模型的参数
@@ -37,9 +37,9 @@ data_collator = DataCollatorForLanguageModelingSpecial(tokenizer=tokenizer,
                                                        return_tensors="pt")
 
 data_collator = DataCollatorForWholeWordMaskSpecial(tokenizer=tokenizer,
-                                                       mlm=True,
-                                                       mlm_probability=0.15,
-                                                       return_tensors="pt")
+                                                    mlm=True,
+                                                    mlm_probability=0.15,
+                                                    return_tensors="pt")
 
 '''
 获取数据
@@ -125,20 +125,20 @@ def create_batch(data, tokenizer, data_collator):
 
     for array_index, textstr in enumerate(encoded_dict_textandquestion['input_ids']):
 
-        start_in =CommonUtil.get_first_index_in_array(textstr,encoded_dict_answers['input_ids'][array_index]) #这方法在data_collator存在，不再重复写了
+        start_in = CommonUtil.get_first_index_in_array(textstr, encoded_dict_answers['input_ids'][
+            array_index])  # 这方法在data_collator存在，不再重复写了
         if start_in != -1 and nsps[array_index] == 1:  # 判断是否存在
             nsp_labels.append(nsp_label_id.get(True))
-            start_positions_labels.append(start_in )  # 因为在tokenizer.batch_encode_plus中转换的时候添加了cls
+            start_positions_labels.append(start_in)  # 因为在tokenizer.batch_encode_plus中转换的时候添加了cls
             end_positions_labels.append(start_in + 1 + len(answers[array_index]))
         else:
             nsp_labels.append(nsp_label_id.get(False))
             # 若找不到，则将start得位置 放在最末尾的位置 padding 或者 [SEP]
 
             # 应该是len(textstr) -1得 但是因为在tokenizer.batch_encode_plus中转换的时候添加了cls 所以就是len(textstr) -1 +1
-            sep_in = textstr.index( tokenizer.encode(text='[SEP]',    add_special_tokens=False)[0])
+            sep_in = textstr.index(tokenizer.encode(text='[SEP]', add_special_tokens=False)[0])
             start_positions_labels.append(sep_in)
             end_positions_labels.append(sep_in)
-
 
     base_input_ids = [torch.tensor(input_id) for input_id in encoded_dict_textandquestion['input_ids']]
     attention_masks = [torch.tensor(attention) for attention in encoded_dict_textandquestion['attention_mask']]
@@ -238,7 +238,7 @@ def evaluate(model, data_loader):
         end_loss = loss_fct(qa_end_logits, end_positions_labels)
         qa_loss = (start_loss + end_loss) / 2
 
-        total_loss = mlm_loss + torch.exp(nsp_loss) * qa_loss
+        total_loss = mlm_loss + torch.sqrt(torch.exp(nsp_loss)) * qa_loss
 
         optim.zero_grad()  # 每次计算的时候需要把上次计算的梯度设置为0
 
@@ -261,12 +261,18 @@ def evaluate(model, data_loader):
     model_recall.reset()
     print('评估准确度: %.6f - 召回率: %.6f - f1得分: %.6f- 损失函数: %.6f' % (precision, recall, f1_score, total_loss))
 
-viz = Visdom() #可视化
-name = ['mlm_loss','nsp_loss', 'qa_loss', 'total_loss']
-viz.line(Y=[(0.,0.,0.,0.)], X=[(0.,0.,0.,0.)], win="train loss", opts=dict(title='train_loss',legend=name,markers=False)) #绘制起始位置
+
+viz = Visdom()  # 可视化
+name = ['mlm_loss', 'nsp_loss', 'qa_loss', 'total_loss']
+viz.line(Y=[(0., 0., 0., 0.)], X=[(0., 0., 0., 0.)], win="train loss",
+         opts=dict(title='train_loss', legend=name, markers=False))  # 绘制起始位置
 # 进行训练
 for epoch in range(epoch_size):  # 所有数据迭代总的次数
-
+    epoch_mlm_loss = 0
+    epoch_nsp_loss = 0
+    epoch_qa_loss = 0
+    epoch_total_loss = 0
+    epoch_step=0
     for step, return_batch_data in enumerate(train_dataloader):  # 一个batch一个bach的训练完所有数据
 
         mask_input_ids, attention_masks, mask_input_labels, nsp_labels, start_positions_labels, end_positions_labels = return_batch_data
@@ -299,14 +305,24 @@ for epoch in range(epoch_size):  # 所有数据迭代总的次数
         end_loss = loss_fct(qa_end_logits, end_positions_labels)
         qa_loss = (start_loss + end_loss) / 2
 
-        total_loss = mlm_loss  +torch.sqrt(torch.exp(nsp_loss)) * qa_loss  # 目的是为了当nsp预测错了的时候 加大惩罚程度
+        total_loss = mlm_loss + torch.sqrt(torch.exp(nsp_loss)) * qa_loss  # 目的是为了当nsp预测错了的时候 加大惩罚程度
+
+        #进行统计展示
+        epoch_step+=1
+        epoch_mlm_loss+=mlm_loss.detach()
+        epoch_nsp_loss+=nsp_loss.detach()
+        epoch_qa_loss+=qa_loss.detach()
+        epoch_total_loss+=total_loss.detach()
 
         optim.zero_grad()  # 每次计算的时候需要把上次计算的梯度设置为0
 
         total_loss.backward()  # 反向传播
-        print('第%d个epoch的%d批数据的loss：%f' % (epoch, step, total_loss))
-        # numpy不可以直接在有梯度的数据上获取，需要先去除梯度
-        viz.line(Y=[(mlm_loss.detach(),nsp_loss.detach(),qa_loss.detach(),total_loss.detach())], X=[(step,step,step,step)], win="train loss", update='append' ) # 绘制epoch以及对应的测试集损失loss 第一个参数是y  第二个是x
+        print('第%d个epoch的%d批数据的loss：%f' % (epoch+1, step+1, total_loss))
+
         optim.step()  # 用来更新参数，也就是的w和b的参数更新操作
 
+    # numpy不可以直接在有梯度的数据上获取，需要先去除梯度
+    # 绘制epoch以及对应的测试集损失loss 第一个参数是y  第二个是x
+    viz.line(Y=[(epoch_mlm_loss/epoch_step, epoch_nsp_loss/epoch_step, epoch_qa_loss/epoch_step, epoch_total_loss/epoch_step)],
+             X=[(epoch+1, epoch+1, epoch+1, epoch+1)], win="train loss", update='append')
 torch.save(model.state_dict(), "save_model/path1")
