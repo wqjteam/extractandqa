@@ -12,6 +12,7 @@ from visdom import Visdom
 from transformers import AutoTokenizer, DataCollatorForLanguageModeling
 
 import CommonUtil
+from PraticeOfTransformers import Utils
 from PraticeOfTransformers.DataCollatorForLanguageModelingSpecial import DataCollatorForLanguageModelingSpecial
 from PraticeOfTransformers.CustomModelForNSPQA import BertForUnionNspAndQA
 from PraticeOfTransformers.DataCollatorForWholeWordMaskSpecial import DataCollatorForWholeWordMaskSpecial
@@ -204,7 +205,7 @@ model.to(device)
 
 
 #  评估函数，用作训练一轮，评估一轮使用
-def evaluate(model, eval_data_loader,epoch):
+def evaluate(model, eval_data_loader,epoch,tokenizer):
     eval_mlm_loss = 0
     eval_nsp_loss = 0
     eval_qa_loss = 0
@@ -245,6 +246,14 @@ def evaluate(model, eval_data_loader,epoch):
 
         total_loss = mlm_loss + torch.sqrt(torch.exp(nsp_loss)) * qa_loss
 
+        '''
+        实际预测值与目标值的
+        '''
+        qa_start_logits_argmax=torch.argmax(qa_start_logits,dim=1)
+        qa_end_logits_argmax=torch.argmax(qa_end_logits,dim=1)
+        qa_predict=  [ Utils.get_all_word(tokenizer,mask_input_ids[index,start:end].numpy().tolist()) for index,(start,end)  in enumerate(zip(qa_start_logits_argmax,qa_end_logits_argmax))]
+        qa_target=   [ Utils.get_all_word(tokenizer,mask_input_ids[index,start:end].numpy().tolist()) for index,(start,end) in enumerate(zip(start_positions_labels,end_positions_labels))]
+        qa_metric=Utils.get_eval(pred=qa_predict,target=qa_target)
         # 损失函数的平均值
         # 按照概率最大原则，计算单字的标签编号
         # argmax计算logits中最大元素值的索引，从0开始
@@ -254,17 +263,14 @@ def evaluate(model, eval_data_loader,epoch):
         eval_nsp_loss+=nsp_loss.detach()
         eval_qa_loss+=qa_loss.detach()
         eval_total_loss+=total_loss.detach()
-    f1_score = model_f1.compute()
-    recall = model_recall.compute()
-    precision = model_precision.compute()
+
     viz.line(Y=[(eval_mlm_loss/eval_step, eval_nsp_loss/eval_step, eval_qa_loss/eval_step, eval_total_loss/eval_step)],
              X=[(epoch+1, epoch+1, epoch+1, epoch+1)], win="pitcure_2", update='append')
     # 清空计算对象
-    model_precision.reset()
-    model_f1.reset()
-    model_recall.reset()
+
     print('--eval--准确度: %.6f - 召回率: %.6f - f1得分: %.6f- 损失函数: %.6f' % (precision, recall, f1_score, total_loss))
 
+evaluate(model=model,eval_data_loader=dev_dataloader,epoch=1,tokenizer=tokenizer)
 
 viz = Visdom(env=u'origin_train')  # 可视化
 name = ['mlm_loss', 'nsp_loss', 'qa_loss', 'total_loss']
@@ -335,7 +341,7 @@ for epoch in range(epoch_size):  # 所有数据迭代总的次数
              X=[(epoch+1, epoch+1, epoch+1, epoch+1)], win="pitcure_1", update='append')
 
     #绘制评估函数相关数据
-    evaluate(model,dev_dataloader,epoch)
+    evaluate(model=model,eval_data_loader=dev_dataloader,epoch=epoch,tokenizer=tokenizer)
 
     optim.step()  # 用来更新参数，也就是的w和b的参数更新操作
 torch.save(model.state_dict(), "save_model/path1")
