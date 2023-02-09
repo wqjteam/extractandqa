@@ -50,7 +50,7 @@ def normalize_answer(s):
         removed_punc=[]
         #isinstance(ch, list)  做了改进，对几个特殊字符也放过了
         for ch in str_array:
-            if isinstance(ch, list) or ch not in exclude:
+            if  isinstance(ch, list) or ch not in exclude:
                 removed_punc.append(ch)
             else:
                 pass
@@ -105,15 +105,15 @@ def compute_exact(a_gold, a_pred):
 '''
 def get_all_word(tokenizer,bact_id_or_idarray):
     batch_whole_word_array=[]
+    if bact_id_or_idarray is None:  # 判断一下是否为空
+        return batch_whole_word_array
     for id_or_idarray in bact_id_or_idarray:
-        whole_word_array = []
-        if id_or_idarray is None : #判断一下是否为空
-             batch_whole_word_array.append(whole_word_array)
-             continue
+
+
 
 
         if isinstance(id_or_idarray, int): #判断是否为数据  #这种情况为数字
-            whole_word_array.append(tokenizer.convert_ids_to_tokens(id_or_idarray))
+            batch_whole_word_array.append(tokenizer.convert_ids_to_tokens(id_or_idarray))
         else:  #这种情况为 subword  是个数组
             subwordconcat=''
             for id in id_or_idarray:
@@ -122,11 +122,11 @@ def get_all_word(tokenizer,bact_id_or_idarray):
                     subwordconcat=subwordconcat+subword[2:]
                 else:
                     subwordconcat=subword
-            whole_word_array.append(subwordconcat)
+            batch_whole_word_array.append(subwordconcat)
 
-            tempstr = whole_word_array[-1] #如果有英文，把英文小写
-            if (u'\u0041' <= tempstr <= u'\u005a') or (u'\u0061' <= tempstr <= u'\u007a'):
-                whole_word_array[-1] = tempstr.lower()
-        batch_whole_word_array.append(whole_word_array)
+        tempstr = batch_whole_word_array[-1] #如果有英文，把英文小写
+        if (u'\u0041' <= tempstr <= u'\u005a') or (u'\u0061' <= tempstr <= u'\u007a'):
+            batch_whole_word_array[-1] = tempstr.lower()
+        batch_whole_word_array.append(batch_whole_word_array)
 
     return batch_whole_word_array
