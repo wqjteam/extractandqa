@@ -19,7 +19,7 @@ from PraticeOfTransformers.DataCollatorForWholeWordMaskSpecial import DataCollat
 model_name = 'bert-base-chinese'
 tokenizer = AutoTokenizer.from_pretrained(model_name)
 model = BertForUnionNspAndQA.from_pretrained(model_name, num_labels=2)  # num_labels 测试用一下，看看参数是否传递
-batch_size = 4
+batch_size = 2
 epoch_size = 1000
 # 用于梯度回归
 optim = Adam(model.parameters(), lr=5e-5)  # 需要填写模型的参数
@@ -245,14 +245,7 @@ def evaluate(model, eval_data_loader,epoch):
 
         total_loss = mlm_loss + torch.sqrt(torch.exp(nsp_loss)) * qa_loss
 
-        optim.zero_grad()  # 每次计算的时候需要把上次计算的梯度设置为0
-
-        total_loss.backward()  # 反向传播
-        # print(total_loss)
-
-        optim.step()  # 用来更新参数，也就是的w和b的参数更新操作
         # 损失函数的平均值
-
         # 按照概率最大原则，计算单字的标签编号
         # argmax计算logits中最大元素值的索引，从0开始
         #进行统计展示
