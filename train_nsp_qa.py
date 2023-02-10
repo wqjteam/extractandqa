@@ -33,7 +33,7 @@ optim = Adam(model.parameters(), lr=5e-5)  # 需要填写模型的参数
 #                                                              mlm_probability=0.15,
 #                                                              return_tensors="pt")
 
-
+#
 data_collator = DataCollatorForWholeWordMaskSpecial(tokenizer=tokenizer,
                                                     mlm=True,
                                                     mlm_probability=0.15,

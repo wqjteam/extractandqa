@@ -15,7 +15,7 @@ from transformers import PretrainedConfig, PreTrainedModel, BertModel, BertPreTr
 # 为您的配置定义一个 model_type (这里是 model_type = “ resnet”)并不是强制性的，除非您想用 auto classes 注册您的模型(参见上一节)。
 #
 # 完成这些之后，您就可以轻松地创建和保存您的配置，就像使用库中的任何其他模型配置一样。下面是我们如何创建一个 resnet50d 配置文件并保存它:
-from transformers.models.bert.modeling_bert import BertOnlyMLMHead
+from transformers.models.bert.modeling_bert import BertOnlyMLMHead, BertLMPredictionHead
 from transformers.utils import ModelOutput
 
 
@@ -105,9 +105,10 @@ class BertForUnionNspAndQA(BertPreTrainedModel):
 
         self.bert = BertModel(config, add_pooling_layer=True)
         self.qa_outputs = nn.Linear(config.hidden_size, self.num_labels)
-        self.nsp_cls = nn.Linear(config.hidden_size, self.num_labels)
 
-        self.mlm_cls = BertOnlyMLMHead(config)
+        self.nsp_cls = nn.Linear(config.hidden_size, 2)  #nsp就是两种 是和否
+
+        self.mlm_cls = BertLMPredictionHead(config)
         # Initialize weights and apply final processing
         self.post_init()
 
@@ -151,7 +152,7 @@ class BertForUnionNspAndQA(BertPreTrainedModel):
             return_dict=return_dict,
         )
 
-        sequence_output = outputs[0]
+        sequence_output = outputs[0] #隐藏层 最后一层
         #mlm
         mlm_prediction_scores = self.mlm_cls(sequence_output).contiguous()
         #contiguous相当于 flush 是内存改变（前面相当于做了一些lazy的操作）
@@ -183,8 +184,10 @@ class BertForUnionNspAndQA(BertPreTrainedModel):
         #     return ((total_loss,) + output) if total_loss is not None else output
 
         #nsp
-        pooled_output = outputs[1]
+        pooled_output = outputs[1] #已经bertmodel中做了pool
         nsp_relationship_scores = self.nsp_cls(pooled_output)
+
+
         # next_sentence_loss = loss_fct(seq_relationship_scores.view(-1, 2), labels.view(-1))
         # next_sentence_loss = None
         # if labels is not None:
