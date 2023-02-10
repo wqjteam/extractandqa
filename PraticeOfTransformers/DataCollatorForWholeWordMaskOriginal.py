@@ -13,7 +13,7 @@ from PraticeOfTransformers.DataCollatorForLanguageModelingSpecial import DataCol
 
 
 @dataclass
-class DataCollatorForWholeWordMaskSpecial(DataCollatorForLanguageModelingSpecial):
+class DataCollatorForWholeWordMaskOriginal(DataCollatorForLanguageModelingSpecial):
     """
     Data collator used for language modeling that masks entire words.
 
