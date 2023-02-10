@@ -257,7 +257,7 @@ def evaluate(model, eval_data_loader,epoch,tokenizer):
         qa_end_logits_argmax=torch.argmax(qa_end_logits,dim=1)
         qa_predict=  [ Utils.get_all_word(tokenizer,mask_input_ids[index,start:end].numpy().tolist()) for index,(start,end)  in enumerate(zip(qa_start_logits_argmax,qa_end_logits_argmax))]
         qa_target=   [ Utils.get_all_word(tokenizer,mask_input_ids[index,start:end].numpy().tolist()) for index,(start,end) in enumerate(zip(start_positions_labels,end_positions_labels))]
-        qa_metric=Utils.get_eval(pred=qa_predict,target=qa_target)
+        qa_metric=Utils.get_eval(pred_arr=qa_predict,target_arr=qa_target)
         em_score=qa_metric['EM']
         f1_score=qa_metric['F1']
         # 损失函数的平均值

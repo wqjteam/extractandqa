@@ -18,22 +18,22 @@ def pad_sequense_python(list_args, fillvalue):
     return result
 
 
-def get_eval(pred, target):
-    pred
+def get_eval(pred_arr, target_arr): #pred_arr与target_arr 必须是二维数组
+
     total_f1 = 0
     total_em = 0
     # 如果两个pred 和target数量都不相等
-    if len(pred) != len(target):
+    if len(pred_arr) != len(target_arr):
         pass
     else:
-        for pred_array, real_array in zip(pred, target):
+        for pred_array, real_array in zip(pred_arr, target_arr):
             f1 = compute_f1(a_gold=real_array, a_pred=pred_array)
             em = compute_exact(a_gold=real_array, a_pred=pred_array)
             total_em += em
             total_f1 += f1
 
-    metric = {'EM': (total_em / len(target)) * 100,
-              'F1': (total_f1 / len(target)) * 100}
+    metric = {'EM': (total_em / len(target_arr)) * 100,
+              'F1': (total_f1 / len(target_arr)) * 100}
     return metric
 
 
@@ -69,8 +69,6 @@ F1:计算预测出的答案与原始答案字符之间的overlap，
 根据overlap的数目与原始ground truth answer的字符数目计算回召率，
 overlap的数目与预测出的所有字符数目计算准确率
 '''
-
-
 def compute_f1(a_gold, a_pred):
     gold_toks = get_token(a_gold)
     pred_toks = get_token(a_pred)
@@ -78,10 +76,12 @@ def compute_f1(a_gold, a_pred):
         return int(gold_toks == pred_toks)
 
     common = collections.Counter(gold_toks) & collections.Counter(pred_toks)
-    num_same = sum(common.values())
+    num_same = sum(common.values())  #共同出现的词的个数
+    #精确率(precision)是 指预测的答案有多大比例的单词在标准答案中出现
+    precision = 1.0 * num_same / len(gold_toks)
 
-    precision = 1.0 * num_same / len(pred_toks)
-    recall = 1.0 * num_same / len(gold_toks)
+    #召回率(recall)是 指标准答案中的单词有多大比例在预测答案中出现
+    recall = 1.0 * num_same / len(pred_toks)
     if precision + recall==0: #如果分母为0 则直接返回为0
         return 0
     f1 = (2 * precision * recall) / (precision + recall)

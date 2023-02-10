@@ -8,6 +8,7 @@ from transformers import AutoTokenizer, DataCollatorForLanguageModeling, DataCol
     DataCollatorForWholeWordMask
 
 import CommonUtil
+from PraticeOfTransformers import Utils
 from PraticeOfTransformers.DataCollatorForWholeWordMaskOriginal import DataCollatorForWholeWordMaskOriginal
 
 pred = torch.tensor([[0.0,10.0,0.0],[0.0,0.0,10.0]])
@@ -63,10 +64,15 @@ temp=[list()]
 aa=lmtokener(zip(input,temp))
 
 
-
-print(tokenizer.convert_ids_to_tokens(encoded_dict['input_ids']))
-print(aa)
-print(tokenizer.convert_ids_to_tokens(aa['input_ids'][0]))
-print(len(sentence))
-print(len(encoded_dict['input_ids']))
-
+#
+# print(tokenizer.convert_ids_to_tokens(encoded_dict['input_ids']))
+# print(aa)
+# print(tokenizer.convert_ids_to_tokens(aa['input_ids'][0]))
+# print(len(sentence))
+# print(len(encoded_dict['input_ids']))
+pred=[['北','京','航','空','航','天','大','学'],[],['北','京']]
+target=[['北','京','航','空','航','天','大'],[],[]]
+# target=['北','京','航','空','航','天','大','学']
+# target=['北','京','航','空','航','天','大','学']
+metric=Utils.get_eval(pred_arr=pred,target_arr=target)
+print(metric)

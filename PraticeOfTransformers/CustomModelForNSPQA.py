@@ -104,11 +104,13 @@ class BertForUnionNspAndQA(BertPreTrainedModel):
         self.num_labels = config.num_labels
 
         self.bert = BertModel(config, add_pooling_layer=True)
-        self.qa_outputs = nn.Linear(config.hidden_size, self.num_labels)
+
+        self.mlm_cls = BertLMPredictionHead(config)
 
         self.nsp_cls = nn.Linear(config.hidden_size, 2)  #nsp就是两种 是和否
 
-        self.mlm_cls = BertLMPredictionHead(config)
+        self.qa_outputs = nn.Linear(config.hidden_size, self.num_labels)
+
         # Initialize weights and apply final processing
         self.post_init()
 
