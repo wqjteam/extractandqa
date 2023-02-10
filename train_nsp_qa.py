@@ -17,6 +17,7 @@ from PraticeOfTransformers.DataCollatorForLanguageModelingSpecial import DataCol
 from PraticeOfTransformers.CustomModelForNSPQA import BertForUnionNspAndQA
 from PraticeOfTransformers.DataCollatorForWholeWordMaskOriginal import DataCollatorForWholeWordMaskOriginal
 from PraticeOfTransformers.DataCollatorForWholeWordMaskSpecial import DataCollatorForWholeWordMaskSpecial
+import sys
 
 model_name = 'bert-base-chinese'
 tokenizer = AutoTokenizer.from_pretrained(model_name)
@@ -25,24 +26,20 @@ batch_size = 2
 epoch_size = 1000
 # 用于梯度回归
 optim = Adam(model.parameters(), lr=5e-5)  # 需要填写模型的参数
-
-# model = BertForUnionNspAndQA.from_pretrained(model_name)
-# print(model)
-# data_collator = DataCollatorForLanguageModeling(tokenizer=tokenizer,
-#                                                              mlm=True,
-#                                                              mlm_probability=0.15,
-#                                                              return_tensors="pt")
-
-#
+print('--------------------sys.argv:%s-------------------'%(','.join(sys.argv)))
+if len(sys.argv) >= 2 :
+    batch_size=int(sys.argv[1])
+if len(sys.argv) >= 3  :
+    epoch_size=int(sys.argv[2])
 data_collator = DataCollatorForWholeWordMaskSpecial(tokenizer=tokenizer,
                                                     mlm=True,
                                                     mlm_probability=0.15,
                                                     return_tensors="pt")
-
-# data_collator = DataCollatorForWholeWordMaskOriginal(tokenizer=tokenizer,
-#                                                     mlm=True,
-#                                                     mlm_probability=0.15,
-#                                                     return_tensors="pt")
+if len(sys.argv) >= 4 and sys.argv[3] == 'origin':
+    data_collator = DataCollatorForWholeWordMaskOriginal(tokenizer=tokenizer,
+                                                         mlm=True,
+                                                         mlm_probability=0.15,
+                                                         return_tensors="pt")
 
 '''
 获取数据
@@ -52,8 +49,8 @@ passage_keyword_json = pd.read_json("./data/origin/intercontest/passage_qa_keywo
 # passage_keyword_json['q_a'] 和 passage_keyword_json['q_a'].q_a 一样
 passage_keyword_json = passage_keyword_json[passage_keyword_json['q_a'].apply(lambda x: len(x) >= 1)]
 
-passage_keyword_json = passage_keyword_json[passage_keyword_json.nsp == 1]
-passage_keyword_json = passage_keyword_json[passage_keyword_json['sentence'].apply(lambda x: '长治市博物馆，' in x)]
+# passage_keyword_json = passage_keyword_json[passage_keyword_json.nsp == 1]
+# passage_keyword_json = passage_keyword_json[passage_keyword_json['sentence'].apply(lambda x: '长治市博物馆，' in x)]
 
 passage_keyword_json = passage_keyword_json.explode("q_a").values
 
@@ -207,14 +204,14 @@ model.to(device)
 
 
 #  评估函数，用作训练一轮，评估一轮使用
-def evaluate(model, eval_data_loader,epoch,tokenizer):
+def evaluate(model, eval_data_loader, epoch, tokenizer):
     eval_mlm_loss = 0
     eval_nsp_loss = 0
     eval_qa_loss = 0
     eval_total_loss = 0
-    eval_em_score=0
-    eval_f1_score=0
-    eval_step=0
+    eval_em_score = 0
+    eval_f1_score = 0
+    eval_step = 0
     # 依次处理每批数据
     for return_batch_data in eval_data_loader:  # 一个batch一个bach的训练完所有数据
         mask_input_ids, attention_masks, mask_input_labels, nsp_labels, start_positions_labels, end_positions_labels = return_batch_data
@@ -253,43 +250,45 @@ def evaluate(model, eval_data_loader,epoch,tokenizer):
         '''
         实际预测值与目标值的
         '''
-        qa_start_logits_argmax=torch.argmax(qa_start_logits,dim=1)
-        qa_end_logits_argmax=torch.argmax(qa_end_logits,dim=1)
-        qa_predict=  [ Utils.get_all_word(tokenizer,mask_input_ids[index,start:end].numpy().tolist()) for index,(start,end)  in enumerate(zip(qa_start_logits_argmax,qa_end_logits_argmax))]
-        qa_target=   [ Utils.get_all_word(tokenizer,mask_input_ids[index,start:end].numpy().tolist()) for index,(start,end) in enumerate(zip(start_positions_labels,end_positions_labels))]
-        qa_metric=Utils.get_eval(pred_arr=qa_predict,target_arr=qa_target)
-        em_score=qa_metric['EM']
-        f1_score=qa_metric['F1']
+        qa_start_logits_argmax = torch.argmax(qa_start_logits, dim=1)
+        qa_end_logits_argmax = torch.argmax(qa_end_logits, dim=1)
+        qa_predict = [Utils.get_all_word(tokenizer, mask_input_ids[index, start:end].numpy().tolist()) for
+                      index, (start, end) in enumerate(zip(qa_start_logits_argmax, qa_end_logits_argmax))]
+        qa_target = [Utils.get_all_word(tokenizer, mask_input_ids[index, start:end].numpy().tolist()) for
+                     index, (start, end) in enumerate(zip(start_positions_labels, end_positions_labels))]
+        qa_metric = Utils.get_eval(pred_arr=qa_predict, target_arr=qa_target)
+        em_score = qa_metric['EM']
+        f1_score = qa_metric['F1']
         # 损失函数的平均值
         # 按照概率最大原则，计算单字的标签编号
         # argmax计算logits中最大元素值的索引，从0开始
-        #进行统计展示
-        eval_step+=1
-        eval_mlm_loss+=mlm_loss.detach()
-        eval_nsp_loss+=nsp_loss.detach()
-        eval_qa_loss+=qa_loss.detach()
-        eval_total_loss+=total_loss.detach()
-        eval_em_score+=em_score
-        eval_f1_score+=f1_score
-    viz.line(Y=[(eval_mlm_loss/eval_step, eval_nsp_loss/eval_step, eval_qa_loss/eval_step, eval_total_loss/eval_step)],
-             X=[(epoch+1, epoch+1, epoch+1, epoch+1)], win="pitcure_2", update='append')
-    viz.line(Y=[(eval_em_score/eval_step, eval_f1_score/eval_step)],
-             X=[(epoch+1, epoch+1)], win="pitcure_3", update='append')
+        # 进行统计展示
+        eval_step += 1
+        eval_mlm_loss += mlm_loss.detach()
+        eval_nsp_loss += nsp_loss.detach()
+        eval_qa_loss += qa_loss.detach()
+        eval_total_loss += total_loss.detach()
+        eval_em_score += em_score
+        eval_f1_score += f1_score
+    viz.line(Y=[
+        (eval_mlm_loss / eval_step, eval_nsp_loss / eval_step, eval_qa_loss / eval_step, eval_total_loss / eval_step)],
+             X=[(epoch + 1, epoch + 1, epoch + 1, epoch + 1)], win="pitcure_2", update='append')
+    viz.line(Y=[(eval_em_score / eval_step, eval_f1_score / eval_step)],
+             X=[(epoch + 1, epoch + 1)], win="pitcure_3", update='append')
 
     print('--eval---eopch: %d --em得分: %.6f - f1得分: %.6f- 损失函数: %.6f' % (epoch, em_score, f1_score, total_loss))
 
 
-
 viz = Visdom(env=u'origin_train')  # 可视化
 name = ['mlm_loss', 'nsp_loss', 'qa_loss', 'total_loss']
-name_em_f1=['em_score','f1_score']
+name_em_f1 = ['em_score', 'f1_score']
 viz.line(Y=[(0., 0., 0., 0.)], X=[(0., 0., 0., 0.)], win="pitcure_1",
-         opts=dict(title='train_loss', legend=name, markers=False))  # 绘制起始位置 #win指的是图形id
+         opts=dict(title='train_loss', legend=name, xlabel='epoch', ylabel='loss', markers=False))  # 绘制起始位置 #win指的是图形id
 viz.line(Y=[(0., 0., 0., 0.)], X=[(0., 0., 0., 0.)], win="pitcure_2",
-         opts=dict(title='eval_loss', legend=name, markers=False))  # 绘制起始位置
+         opts=dict(title='eval_loss', legend=name, xlabel='epoch', ylabel='loss', markers=False))  # 绘制起始位置
 viz.line(Y=[(0., 0.)], X=[(0., 0.)], win="pitcure_3",
-         opts=dict(title='eval_em_f1', legend=name_em_f1, markers=False))  # 绘制起始位置
-
+         opts=dict(title='eval_em_f1', legend=name_em_f1, xlabel='epoch', ylabel='score(100分制)',
+                   markers=False))  # 绘制起始位置
 
 # 进行训练
 for epoch in range(epoch_size):  # 所有数据迭代总的次数
@@ -297,7 +296,7 @@ for epoch in range(epoch_size):  # 所有数据迭代总的次数
     epoch_nsp_loss = 0
     epoch_qa_loss = 0
     epoch_total_loss = 0
-    epoch_step=0
+    epoch_step = 0
     for step, return_batch_data in enumerate(train_dataloader):  # 一个batch一个bach的训练完所有数据
 
         mask_input_ids, attention_masks, mask_input_labels, nsp_labels, start_positions_labels, end_positions_labels = return_batch_data
@@ -332,27 +331,32 @@ for epoch in range(epoch_size):  # 所有数据迭代总的次数
 
         total_loss = mlm_loss + torch.sqrt(torch.exp(nsp_loss)) * qa_loss  # 目的是为了当nsp预测错了的时候 加大惩罚程度
 
-        #进行统计展示
-        epoch_step+=1
-        epoch_mlm_loss+=mlm_loss.detach()
-        epoch_nsp_loss+=nsp_loss.detach()
-        epoch_qa_loss+=qa_loss.detach()
-        epoch_total_loss+=total_loss.detach()
+        # 进行统计展示
+        epoch_step += 1
+        epoch_mlm_loss += mlm_loss.detach()
+        epoch_nsp_loss += nsp_loss.detach()
+        epoch_qa_loss += qa_loss.detach()
+        epoch_total_loss += total_loss.detach()
 
         optim.zero_grad()  # 每次计算的时候需要把上次计算的梯度设置为0
 
         total_loss.backward()  # 反向传播
-        print('第%d个epoch的%d批数据的loss：%f' % (epoch+1, step+1, total_loss))
-
-
+        print('第%d个epoch的%d批数据的loss：%f' % (epoch + 1, step + 1, total_loss))
 
     # numpy不可以直接在有梯度的数据上获取，需要先去除梯度
     # 绘制epoch以及对应的测试集损失loss 第一个参数是y  第二个是x
-    viz.line(Y=[(epoch_mlm_loss/epoch_step, epoch_nsp_loss/epoch_step, epoch_qa_loss/epoch_step, epoch_total_loss/epoch_step)],
-             X=[(epoch+1, epoch+1, epoch+1, epoch+1)], win="pitcure_1", update='append')
+    viz.line(Y=[(epoch_mlm_loss / epoch_step, epoch_nsp_loss / epoch_step, epoch_qa_loss / epoch_step,
+                 epoch_total_loss / epoch_step)],
+             X=[(epoch + 1, epoch + 1, epoch + 1, epoch + 1)], win="pitcure_1", update='append')
 
-    #绘制评估函数相关数据
-    evaluate(model=model,eval_data_loader=dev_dataloader,epoch=epoch,tokenizer=tokenizer)
+    # 绘制评估函数相关数据
+    evaluate(model=model, eval_data_loader=dev_dataloader, epoch=epoch, tokenizer=tokenizer)
 
     optim.step()  # 用来更新参数，也就是的w和b的参数更新操作
-torch.save(model.state_dict(), "save_model/path1")
+
+    # 每5个epoch保存一次
+    if (epoch + 1) % 5 == 0:
+        torch.save(model.state_dict(), 'save_model/nsp_qa/epoch_%d' % (epoch + 1))
+
+# 最后保存一下
+torch.save(model.state_dict(), 'save_model/nsp_qa/epoch_%d' % (epoch_size))
