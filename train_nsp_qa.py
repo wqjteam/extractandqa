@@ -15,6 +15,7 @@ import CommonUtil
 from PraticeOfTransformers import Utils
 from PraticeOfTransformers.DataCollatorForLanguageModelingSpecial import DataCollatorForLanguageModelingSpecial
 from PraticeOfTransformers.CustomModelForNSPQA import BertForUnionNspAndQA
+from PraticeOfTransformers.DataCollatorForWholeWordMaskOriginal import DataCollatorForWholeWordMaskOriginal
 from PraticeOfTransformers.DataCollatorForWholeWordMaskSpecial import DataCollatorForWholeWordMaskSpecial
 
 model_name = 'bert-base-chinese'
@@ -32,15 +33,16 @@ optim = Adam(model.parameters(), lr=5e-5)  # 需要填写模型的参数
 #                                                              mlm_probability=0.15,
 #                                                              return_tensors="pt")
 
-data_collator = DataCollatorForLanguageModelingSpecial(tokenizer=tokenizer,
-                                                       mlm=True,
-                                                       mlm_probability=0.15,
-                                                       return_tensors="pt")
 
 data_collator = DataCollatorForWholeWordMaskSpecial(tokenizer=tokenizer,
                                                     mlm=True,
                                                     mlm_probability=0.15,
                                                     return_tensors="pt")
+
+# data_collator = DataCollatorForWholeWordMaskOriginal(tokenizer=tokenizer,
+#                                                     mlm=True,
+#                                                     mlm_probability=0.15,
+#                                                     return_tensors="pt")
 
 '''
 获取数据
@@ -50,8 +52,8 @@ passage_keyword_json = pd.read_json("./data/origin/intercontest/passage_qa_keywo
 # passage_keyword_json['q_a'] 和 passage_keyword_json['q_a'].q_a 一样
 passage_keyword_json = passage_keyword_json[passage_keyword_json['q_a'].apply(lambda x: len(x) >= 1)]
 
-# passage_keyword_json = passage_keyword_json[passage_keyword_json.nsp == 0]
-# passage_keyword_json = passage_keyword_json[passage_keyword_json['sentence'].apply(lambda x: '长治市博物馆，' in x)]
+passage_keyword_json = passage_keyword_json[passage_keyword_json.nsp == 1]
+passage_keyword_json = passage_keyword_json[passage_keyword_json['sentence'].apply(lambda x: '长治市博物馆，' in x)]
 
 passage_keyword_json = passage_keyword_json.explode("q_a").values
 
@@ -210,6 +212,8 @@ def evaluate(model, eval_data_loader,epoch,tokenizer):
     eval_nsp_loss = 0
     eval_qa_loss = 0
     eval_total_loss = 0
+    eval_em_score=0
+    eval_f1_score=0
     eval_step=0
     # 依次处理每批数据
     for return_batch_data in eval_data_loader:  # 一个batch一个bach的训练完所有数据
@@ -254,6 +258,8 @@ def evaluate(model, eval_data_loader,epoch,tokenizer):
         qa_predict=  [ Utils.get_all_word(tokenizer,mask_input_ids[index,start:end].numpy().tolist()) for index,(start,end)  in enumerate(zip(qa_start_logits_argmax,qa_end_logits_argmax))]
         qa_target=   [ Utils.get_all_word(tokenizer,mask_input_ids[index,start:end].numpy().tolist()) for index,(start,end) in enumerate(zip(start_positions_labels,end_positions_labels))]
         qa_metric=Utils.get_eval(pred=qa_predict,target=qa_target)
+        em_score=qa_metric['EM']
+        f1_score=qa_metric['F1']
         # 损失函数的平均值
         # 按照概率最大原则，计算单字的标签编号
         # argmax计算logits中最大元素值的索引，从0开始
@@ -263,21 +269,26 @@ def evaluate(model, eval_data_loader,epoch,tokenizer):
         eval_nsp_loss+=nsp_loss.detach()
         eval_qa_loss+=qa_loss.detach()
         eval_total_loss+=total_loss.detach()
-
+        eval_em_score+=em_score
+        eval_f1_score+=f1_score
     viz.line(Y=[(eval_mlm_loss/eval_step, eval_nsp_loss/eval_step, eval_qa_loss/eval_step, eval_total_loss/eval_step)],
              X=[(epoch+1, epoch+1, epoch+1, epoch+1)], win="pitcure_2", update='append')
-    # 清空计算对象
+    viz.line(Y=[(eval_em_score/eval_step, eval_f1_score/eval_step)],
+             X=[(epoch+1, epoch+1)], win="pitcure_3", update='append')
 
-    print('--eval--准确度: %.6f - 召回率: %.6f - f1得分: %.6f- 损失函数: %.6f' % (precision, recall, f1_score, total_loss))
+    print('--eval---eopch: %d --em得分: %.6f - f1得分: %.6f- 损失函数: %.6f' % (epoch, em_score, f1_score, total_loss))
 
-evaluate(model=model,eval_data_loader=dev_dataloader,epoch=1,tokenizer=tokenizer)
+
 
 viz = Visdom(env=u'origin_train')  # 可视化
 name = ['mlm_loss', 'nsp_loss', 'qa_loss', 'total_loss']
+name_em_f1=['em_score','f1_score']
 viz.line(Y=[(0., 0., 0., 0.)], X=[(0., 0., 0., 0.)], win="pitcure_1",
          opts=dict(title='train_loss', legend=name, markers=False))  # 绘制起始位置 #win指的是图形id
 viz.line(Y=[(0., 0., 0., 0.)], X=[(0., 0., 0., 0.)], win="pitcure_2",
          opts=dict(title='eval_loss', legend=name, markers=False))  # 绘制起始位置
+viz.line(Y=[(0., 0.)], X=[(0., 0.)], win="pitcure_3",
+         opts=dict(title='eval_em_f1', legend=name_em_f1, markers=False))  # 绘制起始位置
 
 
 # 进行训练

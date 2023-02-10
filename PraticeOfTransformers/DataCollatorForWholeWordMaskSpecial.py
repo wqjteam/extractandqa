@@ -56,20 +56,25 @@ class DataCollatorForWholeWordMaskSpecial(DataCollatorForLanguageModelingSpecial
         batch_input = self._torch_collate_batch(examples=input_ids, tokenizer=self.tokenizer, pad_to_multiple_of=self.pad_to_multiple_of)
 
         mask_labels = []
-        for e in examples:
+        for e,k in zip(examples,kyewords):
             ref_tokens = []
+            kw_tokens = []
             for id in tolist(e["input_ids"]):
                 token = self.tokenizer._convert_id_to_token(id)
                 ref_tokens.append(token)
+            for k_id in k:
+                k_token = self.tokenizer._convert_id_to_token(k_id)
+                kw_tokens.append(k_token)
 
             # For Chinese tokens, we need extra inf to mark sub-word, e.g [喜,欢]-> [喜，##欢]
+            #目前这里目前  没用到过
             if "chinese_ref" in e:
                 ref_pos = tolist(e["chinese_ref"])
                 len_seq = len(e["input_ids"])
                 for i in range(len_seq):
                     if i in ref_pos:
                         ref_tokens[i] = "##" + ref_tokens[i]
-            mask_labels.append(self._whole_word_mask(ref_tokens))
+            mask_labels.append(self._whole_word_mask(input_tokens=ref_tokens,kw_tokens=kw_tokens))
         #对于subword的单词及逆行mask
         batch_mask = self._torch_collate_batch(examples=mask_labels, tokenizer=self.tokenizer, pad_to_multiple_of=self.pad_to_multiple_of)
         inputs, labels = self.torch_mask_tokens(batch_input, batch_mask)
@@ -79,7 +84,7 @@ class DataCollatorForWholeWordMaskSpecial(DataCollatorForLanguageModelingSpecial
 
 
 
-    def _whole_word_mask(self, input_tokens: List[str], max_predictions=512):
+    def _whole_word_mask(self, input_tokens: List[str],kw_tokens: List[str], max_predictions=512):
         """
         Get 0/1 labels for masked tokens with whole word mask proxy
         """
@@ -89,15 +94,39 @@ class DataCollatorForWholeWordMaskSpecial(DataCollatorForLanguageModelingSpecial
                 "Please refer to the documentation for more information."
             )
 
-        cand_indexes = []
-        for i, token in enumerate(input_tokens):
-            if token == "[CLS]" or token == "[SEP]":
-                continue
 
-            if len(cand_indexes) >= 1 and token.startswith("##"):
-                cand_indexes[-1].append(i)
+        '''
+        这一块的逻辑需要更改，将关键词转为一个词，关键词要么整个被选中，要么不被选中
+        '''
+        #先处理keyword
+        keyword_start_all_index=self.get_index_in_array(be_search_array=input_tokens, target_array=kw_tokens)
+        post_tokens=[]
+        post_index=[]
+        curr_index=0
+        while(curr_index<len(input_tokens)):
+            if (curr_index,curr_index+len(kw_tokens)) not in keyword_start_all_index: #keyword_start_all_index 返回时[（star,end）]
+                post_tokens.append([input_tokens[curr_index]])
+                post_index.append([curr_index])
+                curr_index+=1
             else:
-                cand_indexes.append([i])
+                post_tokens.append([_ for _ in  input_tokens[curr_index:curr_index+len(kw_tokens)]])
+                post_index.append([_ for _ in  range(curr_index,curr_index+len(kw_tokens))])
+                curr_index+=len(kw_tokens)
+
+
+        # 在处理subword
+        cand_indexes = []
+        for  index_arr,token_arr in zip(post_index,post_tokens):
+            if len(token_arr)==1 and (token_arr[0] == "[CLS]" or token_arr[0] == "[SEP]"):
+                continue
+            #对于涉及到关键词的直接添加了，因为如果input被分为多个subword，那么关键词肯定也会被分成subword，所以不用考虑后面的
+            if len(token_arr)!=1:
+                cand_indexes.append(index_arr)
+                continue
+            if len(cand_indexes) >= 1 and token_arr[0].startswith("##"):
+                cand_indexes[-1].append(index_arr[0])
+            else:
+                cand_indexes.append(index_arr)
 
         random.shuffle(cand_indexes)
         num_to_predict = min(max_predictions, max(1, int(round(len(input_tokens) * self.mlm_probability))))
@@ -168,22 +197,6 @@ class DataCollatorForWholeWordMaskSpecial(DataCollatorForLanguageModelingSpecial
 
 
 
-
-
-    def get_index_in_array(self,be_search_array,target_array):
-            a = be_search_array
-            b = target_array
-            index = 0
-            find_all_index = []
-            while (index < len(a)):
-                #当两个数组形式对比的时候，有一个为ndraay 需要用到.all() 如果是两个纯array则不需要
-                if a[index] == b[0] and (index + len(b)) <= len(a) and (a[index:index + len(b)] == b[:]).all():
-                    find_all_index.append((index, index + len(b)))
-                    index += len(b)
-                else:
-                    index += 1
-            return find_all_index
-
     def _torch_collate_batch(self,examples, tokenizer, pad_to_multiple_of: Optional[int] = None):
         """Collate `examples` into a batch, using the information in `tokenizer` for padding if necessary."""
         import torch
@@ -219,3 +232,22 @@ class DataCollatorForWholeWordMaskSpecial(DataCollatorForLanguageModelingSpecial
                 result[i, -example.shape[0]:] = example
         return result
 
+
+
+
+
+
+
+    def get_index_in_array(self,be_search_array,target_array):
+            a = be_search_array
+            b = target_array
+            index = 0
+            find_all_index = []
+            while (index < len(a)):
+                #当两个数组形式对比的时候，有一个为ndraay 需要用到.all() 如果是两个纯array则不需要
+                if a[index] == b[0] and (index + len(b)) <= len(a) and (a[index:index + len(b)] == b[:]):
+                    find_all_index.append((index, index + len(b)))
+                    index += len(b)
+                else:
+                    index += 1
+            return find_all_index

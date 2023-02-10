@@ -8,8 +8,7 @@ from transformers import AutoTokenizer, DataCollatorForLanguageModeling, DataCol
     DataCollatorForWholeWordMask
 
 import CommonUtil
-from PraticeOfTransformers.DataCollatorForLanguageModelingSpecial import DataCollatorForLanguageModelingSpecial
-from PraticeOfTransformers.DataCollatorForWholeWordMaskSpecial import DataCollatorForWholeWordMaskSpecial
+from PraticeOfTransformers.DataCollatorForWholeWordMaskOriginal import DataCollatorForWholeWordMaskOriginal
 
 pred = torch.tensor([[0.0,10.0,0.0],[0.0,0.0,10.0]])
 
@@ -39,7 +38,7 @@ model_name = 'bert-base-chinese'
 tokenizer = AutoTokenizer.from_pretrained(model_name)
 
 sentence="长治市博物馆，位于长治市太行西街。1990年9月动工兴建新馆，1992年10月落成，占地面积13340平方米，建筑面积8200平方米"
-sentence="13340平方米，建筑面积位于长治市太行西街"
+sentence="13340平方"
 encoded_dict = tokenizer.encode_plus(
     text=sentence,
     # 输入文本,采用list[tuple(question,text)]的方式进行输入 zip 把两个list压成tuple的list对
@@ -53,19 +52,21 @@ encoded_dict = tokenizer.encode_plus(
 #                                                        mlm=True,
 #                                                        mlm_probability=0.15,
 #                                                        return_tensors="pt")
-lmtokener=DataCollatorForWholeWordMaskSpecial(tokenizer=tokenizer,
+lmtokener=DataCollatorForWholeWordMaskOriginal(tokenizer=tokenizer,
                                                        mlm=True,
-                                                       mlm_probability=0.55,
+                                                       mlm_probability=0.35,
                                                        return_tensors="pt")
 # lmtokener=DataCollatorForTokenClassification(tokenizer)
 # input=[{'input_ids':encoded_dict['input_ids'],'token_type_ids':encoded_dict['token_type_ids'],'labels':encoded_dict['attention_mask']} ]
 input=[encoded_dict['input_ids']]
-aa=lmtokener(input)
+temp=[list()]
+aa=lmtokener(zip(input,temp))
 
 
 
-print(aa)
 print(tokenizer.convert_ids_to_tokens(encoded_dict['input_ids']))
+print(aa)
+print(tokenizer.convert_ids_to_tokens(aa['input_ids'][0]))
 print(len(sentence))
 print(len(encoded_dict['input_ids']))
 

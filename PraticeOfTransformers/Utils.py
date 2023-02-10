@@ -1,6 +1,6 @@
 import json
 
-import collection
+import collections
 
 
 def pad_sequense_python(list_args, fillvalue):
@@ -37,13 +37,11 @@ def get_eval(pred, target):
     return metric
 
 
-## 去除标点及小写
+## 去除标点及小写 去除特殊字符
 def normalize_answer(s):
     """Lower text and remove punctuation, articles and extra whitespace"""
     punctuation = r"""!"#$%&'()*+_,./:;<>=?@[]\^_`{}|~！￥……（）——【】’：；，《》“。，、？"""
 
-    def white_space_fix(str_array):
-        return ' '.join(str_array.split())
 
     def remove_punc(str_array):
         exclude = set(punctuation)
@@ -54,11 +52,11 @@ def normalize_answer(s):
                 removed_punc.append(ch)
             else:
                 pass
-        return ''.join(removed_punc)
+        return removed_punc
 
 
 
-    return white_space_fix(remove_punc(s))
+    return remove_punc(s)
 
 
 def get_token(s):
@@ -79,12 +77,13 @@ def compute_f1(a_gold, a_pred):
     if len(gold_toks) == 0 or len(pred_toks) == 0:
         return int(gold_toks == pred_toks)
 
-    common = collection.Counter(gold_toks) & collection.Counter(pred_toks)
+    common = collections.Counter(gold_toks) & collections.Counter(pred_toks)
     num_same = sum(common.values())
 
     precision = 1.0 * num_same / len(pred_toks)
     recall = 1.0 * num_same / len(gold_toks)
-
+    if precision + recall==0: #如果分母为0 则直接返回为0
+        return 0
     f1 = (2 * precision * recall) / (precision + recall)
     return f1
 
@@ -103,30 +102,26 @@ def compute_exact(a_gold, a_pred):
 '''
 处理subword的情况，并把英文小写
 '''
-def get_all_word(tokenizer,bact_id_or_idarray):
+def get_all_word(tokenizer,bacth_id):
     batch_whole_word_array=[]
-    if bact_id_or_idarray is None:  # 判断一下是否为空
+    if bacth_id is None:  # 判断一下是否为空
         return batch_whole_word_array
-    for id_or_idarray in bact_id_or_idarray:
+    for id in bacth_id:
+
+        subword = tokenizer.convert_ids_to_tokens(id)
 
 
-
-
-        if isinstance(id_or_idarray, int): #判断是否为数据  #这种情况为数字
-            batch_whole_word_array.append(tokenizer.convert_ids_to_tokens(id_or_idarray))
-        else:  #这种情况为 subword  是个数组
-            subwordconcat=''
-            for id in id_or_idarray:
-                subword=tokenizer.convert_ids_to_tokens(id)
-                if subword.startswith('##'):
-                    subwordconcat=subwordconcat+subword[2:]
-                else:
-                    subwordconcat=subword
-            batch_whole_word_array.append(subwordconcat)
+        if subword.startswith('##'):
+            #有时间预测有问题，预测到subword开头了
+            if len(batch_whole_word_array)==0:
+                batch_whole_word_array.append(subword[2:])
+            else:
+                batch_whole_word_array[-1]=batch_whole_word_array[-1]+subword[2:]
+        else:
+            batch_whole_word_array.append(subword)
 
         tempstr = batch_whole_word_array[-1] #如果有英文，把英文小写
         if (u'\u0041' <= tempstr <= u'\u005a') or (u'\u0061' <= tempstr <= u'\u007a'):
             batch_whole_word_array[-1] = tempstr.lower()
-        batch_whole_word_array.append(batch_whole_word_array)
 
     return batch_whole_word_array
