@@ -200,6 +200,11 @@ def convert_ner_data(file_path):
 #转换json 到qa
 def convert_qa_nsp_data(file_path):
     pass
+
+
+
+
+
 if __name__ == '__main__':
     data=convert_ner_data('../data/origin/intercontest/project-1-at-2023-02-13-15-23-af00a0ee.json')
     print(data)
