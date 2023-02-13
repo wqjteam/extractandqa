@@ -1,6 +1,10 @@
 import json
 
 import collections
+import os
+
+import pandas as pd
+from tqdm import tqdm
 
 
 def pad_sequense_python(list_args, fillvalue):
@@ -125,3 +129,77 @@ def get_all_word(tokenizer,bacth_id):
             batch_whole_word_array[-1] = tempstr.lower()
 
     return batch_whole_word_array
+
+def read(self, data_path):
+    data_parts = ['train', 'valid', 'test']
+    extension = '.txt'
+    dataset = {}
+    for data_part in tqdm(data_parts):
+        file_path = os.path.join(data_path, data_part+extension)
+        dataset[data_part] = self.read_file(str(file_path))
+    return dataset
+
+def read_file(self, file_path):
+    samples = []
+    tokens = []
+    tags = []
+    with open(file_path,'r', encoding='utf-8') as fb:
+        for line in fb:
+            line = line.strip('\n')
+
+            if line == '-DOCSTART- -X- -X- O':
+                # 去除数据头
+                pass
+            elif line =='':
+                # 一句话结束
+                if len(tokens) != 0:
+                    samples.append((tokens, tags))
+                    tokens = []
+                    tags = []
+            else:
+                # 数据分割，只要开头的词和最后一个实体标注。
+                contents = line.split(' ')
+                tokens.append(contents[0])
+                tags.append(contents[-1])
+    return samples
+
+
+#从json抓内text label的格式
+def convert_ner_data(file_path):
+    """
+    file_path: 通过Label Studio导出的csv文件
+    save_path: 保存的路径
+    """
+    data = pd.read_json(file_path)
+
+    text_label_tuple=[]
+    for idx, item in data.iterrows():
+        text = item['text']
+        if text is None:
+            text = ''
+        text_list = list(text)
+        label_list = []
+        labels = item['label']
+        label_list = ['O' for i in range(len(text_list))] #默认添加
+        if labels is  None :
+            pass
+        else:
+
+            for label_item in labels:
+                start = label_item['start']
+                end = label_item['end']
+                label = label_item['labels'][0]
+                label_list[start] = f'B-{label}'
+                label_list[start+1:end-1] = [f'M-{label}' for i in range(end-start-2)]
+                label_list[end - 1] = f'E-{label}'
+        assert len(label_list) == len(text_list)
+        text_label_tuple.append((text_list,label_list))
+
+    return text_label_tuple
+
+#转换json 到qa
+def convert_qa_nsp_data(file_path):
+    pass
+if __name__ == '__main__':
+    data=convert_ner_data('../data/origin/intercontest/project-1-at-2023-02-13-15-23-af00a0ee.json')
+    print(data)
