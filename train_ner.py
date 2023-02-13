@@ -7,7 +7,7 @@ from torch.optim import AdamW
 from transformers import AutoTokenizer, DataCollatorForTokenClassification
 import torch.utils.data as Data
 
-from PraticeOfTransformers import CustomModelForNer
+from PraticeOfTransformers import CustomModelForNer, Utils
 from PraticeOfTransformers.CustomModelForNSPQA import BertForUnionNspAndQA
 from datasets import load_dataset
 
@@ -44,15 +44,16 @@ train_data, dev_data = Data.random_split(passage_keyword_json, [int(len(passage_
                                                                 len(passage_keyword_json) - int(
                                                                     len(passage_keyword_json) * 0.9)])
 
-nsp_id_label = {1: True, 0: False}
-
-nsp_label_id = {True: 1, False: 0}
+ner_id_label = {0:'O',1: 'B-ORG', 2: 'M-ORG',3:'E-ORG',4:'B-LOC', 5:'M-LOC', 6:'E-LOC',7:'B-PER',
+                8:'M-PER', 9:'E-PER',10:'B-Time', 11:'M-Time',12:'E-Time',13:'B-Book', 14:'M-Book',15:'E-Book' }
+ner_label_id = {}
+for key in ner_id_label:
+    ner_label_id[ner_id_label[key]]=key
 
 # 加载conll2003数据集
 
+nerdataset=Utils.convert_ner_data('data/origin/intercontest/project-1-at-2023-02-13-15-23-af00a0ee.json')
 
-nerdataset = load_dataset('conll2003')
-nerdataset = nerdataset["train"]
 task='ner'
 label_all_tokens = True
 
@@ -64,12 +65,14 @@ word_ids将每一个subtokens位置都对应了一个word的下标。
 比如第1个位置对应第0个word，然后第2、3个位置对应第1个word。特殊字符对应了None。
 有了这个list，我们就能将subtokens和words还有标注的labels对齐啦。
 '''
-def tokenize_and_align_labels(examples):
+def tokenize_and_align_labels(examples,tokenizer):
+    tokens,takens_labels=zip(*examples)
+    # tokens, takens_labels = examples
     tokenized_inputs = tokenizer(
-        examples["tokens"], truncation=True, is_split_into_words=True)
+        tokens, truncation=True, is_split_into_words=True)
 
     labels = []
-    for i, label in enumerate(examples[f"{task}_tags"]):
+    for i, label in enumerate(takens_labels):
         # 获取subtokens位置
         word_ids = tokenized_inputs.word_ids(batch_index=i)
         previous_word_idx = None
@@ -82,11 +85,11 @@ def tokenize_and_align_labels(examples):
                 label_ids.append(-100)
             # We set the label for the first token of each word.
             elif word_idx != previous_word_idx:
-                label_ids.append(label[word_idx])
+                label_ids.append(ner_label_id[ label[word_idx]])
             # For the other tokens in a word, we set the label to either the current label or -100, depending on
             # the label_all_tokens flag.
             else:
-                label_ids.append(label[word_idx] if label_all_tokens else -100)
+                label_ids.append(ner_label_id[ label[word_idx]] if label_all_tokens else -100)
             previous_word_idx = word_idx
 
         # 对齐word
@@ -96,70 +99,32 @@ def tokenize_and_align_labels(examples):
     return tokenized_inputs
 
 
-tokenized_datasets = nerdataset.map(tokenize_and_align_labels, batched=True,remove_columns=["id", "tokens", "pos_tags", "chunk_tags", "ner_tags"])
-tokenized_datasets=[a  for a in tokenized_datasets]
+# tokenized_datasets=[tokenize_and_align_labels(data) for data in nerdataset]
+# tokenized_datasets=tokenize_and_align_labels(nerdataset)
+# tokenized_datasets = nerdataset.map(tokenize_and_align_labels, batched=True,remove_columns=["id", "tokens", "pos_tags", "chunk_tags", "ner_tags"])
+# tokenized_datasets=[a  for a in tokenized_datasets]
 # 数据收集器，用于将处理好的数据输入给模型
-data_collator = DataCollatorForTokenClassification(tokenizer)   # 他会对于一些label的空余的位置进行补齐 对于data_collator输入必须有labels属性
+ner_align_data_collator = DataCollatorForTokenClassification(tokenizer)   # 他会对于一些label的空余的位置进行补齐 对于data_collator输入必须有labels属性
+mlm_align_data_collator = DataCollatorForTokenClassification(tokenizer)   # 他会对于一些label的空余的位置进行补齐 对于data_collator输入必须有labels属性
 
 # 看是否用cpu或者gpu训练
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print("-----------------------------------训练模式为%s------------------------------------" % device)
 model.to(device)
 
-def create_batch(data, tokenizer, data_collator):
-    text, question_answer, keyword, nsp = zip(*data)  # arrat的四列 转为tuple
-    text = list(text)  # tuple 转为 list0
-    questions = [q_a.get('question') for q_a in question_answer]
-    answers = [q_a.get('answer') for q_a in question_answer]
-    nsps = list(nsp)  # tuple 转为list
-
-    keywords = [kw[0] for kw in keyword]  # tuple 转为list 变成了双重的list 还是遍历转
-    nsp_labels = []  # 用作判断两句是否相关
-    start_positions_labels = []  # 记录起始位置 需要在进行encode之后再进行添加
-    end_positions_labels = []  # 记录终止始位置 需要在进行encode之后再进行添加
-
-    # start_positions = [q_a.get('start_position') for q_a in question_answer]
-    # end_positions = [q_a.get('end_position') for q_a in question_answer]
-    '''
-    bert是双向的encode 所以qestion和text放在前面和后面区别不大
-    '''
-
-    encoded_dict_textandquestion = tokenizer.batch_encode_plus(
-        batch_text_or_text_pairs=list(zip(text, questions)),  # 输入文本对 # 输入文本,采用list[tuple(text,question)]的方式进行输入
-        add_special_tokens=True,  # 添加 '[CLS]' 和 '[SEP]'
-        max_length=512,  # 填充 & 截断长度
-        truncation=True,
-        padding='longest',
-        return_attention_mask=True,  # 返回 attn. masks.
-    )
-
-
-
-
-
-
-
-
-    base_input_ids = [torch.tensor(input_id) for input_id in encoded_dict_textandquestion['input_ids']]
-    attention_masks = [torch.tensor(attention) for attention in encoded_dict_textandquestion['attention_mask']]
-    # 传入的参数是tensor形式的input_ids，返回input_ids和label，label中-100的位置的词没有被mask
-    data_collator_output = data_collator()
-    mask_input_ids = data_collator_output["input_ids"]
-
-    mask_input_labels = data_collator_output["labels"]  # 需要获取不是-100的位置，证明其未被替换，这也是target -100的位置在计算crossentropyloss 会丢弃
-
+def create_batch(data, tokenizer, ner_data_collator,mlm_data_collator):
+    tokenized_datasets=tokenize_and_align_labels(data,tokenizer)
+    ner_data_collator =ner_data_collator(tokenized_datasets)
     # 对于model只接受tensor[list] 必须为 list[tensor] 转为tensor[list]
-    return mask_input_ids, torch.stack(
-        attention_masks), mask_input_labels, torch.tensor(nsp_labels), torch.tensor(
-        start_positions_labels), torch.tensor(end_positions_labels)
+    return ner_data_collator
 
 
 # 把一些参数固定
-create_batch_partial = partial(create_batch, tokenizer=tokenizer, data_collator=data_collator)
+create_batch_partial = partial(create_batch, tokenizer=tokenizer, ner_data_collator=ner_align_data_collator)
 
 # batch_size 除以2是为了 在后面认为添加了负样本   负样本和正样本是1：1
 train_dataloader = Data.DataLoader(
-    tokenized_datasets, shuffle=True, collate_fn=data_collator, batch_size=batch_size
+    tokenized_datasets, shuffle=True, collate_fn=create_batch, batch_size=batch_size
 )
 
 for epoch in range(epoch_size):  # 所有数据迭代总的次数
