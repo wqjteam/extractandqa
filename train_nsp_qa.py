@@ -22,15 +22,16 @@ import sys
 model_name = 'bert-base-chinese'
 tokenizer = AutoTokenizer.from_pretrained(model_name)
 model = BertForUnionNspAndQA.from_pretrained(model_name, num_labels=2)  # num_labels 测试用一下，看看参数是否传递
+
 batch_size = 2
 epoch_size = 1000
 # 用于梯度回归
 optim = Adam(model.parameters(), lr=5e-5)  # 需要填写模型的参数
-print('--------------------sys.argv:%s-------------------'%(','.join(sys.argv)))
-if len(sys.argv) >= 2 :
-    batch_size=int(sys.argv[1])
-if len(sys.argv) >= 3  :
-    epoch_size=int(sys.argv[2])
+print('--------------------sys.argv:%s-------------------' % (','.join(sys.argv)))
+if len(sys.argv) >= 2:
+    batch_size = int(sys.argv[1])
+if len(sys.argv) >= 3:
+    epoch_size = int(sys.argv[2])
 data_collator = DataCollatorForWholeWordMaskSpecial(tokenizer=tokenizer,
                                                     mlm=True,
                                                     mlm_probability=0.15,
@@ -41,6 +42,14 @@ if len(sys.argv) >= 4 and sys.argv[3] == 'origin':
                                                          mlm_probability=0.15,
                                                          return_tensors="pt")
 
+keyword_flag = False
+if len(sys.argv) >= 5 and sys.argv[4] == 'True':
+    keyword_flag = True
+
+
+if len(sys.argv) >= 6:
+    mode_path = sys.argv[5]
+    model = BertForUnionNspAndQA.from_pretrained(mode_path, num_labels=2)
 '''
 获取数据
 '''
@@ -82,7 +91,7 @@ nsp_label_id = {True: 1, False: 0}
 # print(output)
 
 
-def create_batch(data, tokenizer, data_collator):
+def create_batch(data, tokenizer, data_collator, keyword_flag=False):
     text, question_answer, keyword, nsp = zip(*data)  # arrat的四列 转为tuple
     text = list(text)  # tuple 转为 list0
     questions = [q_a.get('question') for q_a in question_answer]
@@ -140,48 +149,59 @@ def create_batch(data, tokenizer, data_collator):
             start_positions_labels.append(sep_in)
             end_positions_labels.append(sep_in)
 
-    base_input_ids = [torch.tensor(input_id) for input_id in encoded_dict_textandquestion['input_ids']]
-    attention_masks = [torch.tensor(attention) for attention in encoded_dict_textandquestion['attention_mask']]
-    # 传入的参数是tensor形式的input_ids，返回input_ids和label，label中-100的位置的词没有被mask
-    data_collator_output = data_collator(zip(base_input_ids, encoded_dict_keywords['input_ids']))
-    mask_input_ids = data_collator_output["input_ids"]
+    if keyword_flag:
+        # 传入的参数是tensor形式的input_ids，返回input_ids和label，label中-100的位置的词没有被mask
+        base_input_ids = [torch.tensor(input_id) for input_id in encoded_dict_textandquestion['input_ids']]
+        attention_masks = [torch.tensor(attention) for attention in encoded_dict_textandquestion['attention_mask']]
+        data_collator_output = data_collator(zip(base_input_ids, encoded_dict_keywords['input_ids']))
+        mask_input_ids = data_collator_output["input_ids"]
 
-    mask_input_labels = data_collator_output["labels"]  # 需要获取不是-100的位置，证明其未被替换，这也是target -100的位置在计算crossentropyloss 会丢弃
-    '''
-     进行遍历,获取原来的未被mask的数据,再对此进行对齐,方便后续会对此进行计算loss 在计算loss的时候 根据CrossEntropyLoss 的ingore_index 会根据target的属性，
-     直接去出某些值.不进行计算，所以不需要再进行转换
-    '''
-    '''
-    mask_input_postion_x, mask_input_postion_y = torch.where(
-        mask_input_labels != -100)  # 二维数据，结果分为2个array,按照15的% mask 每行都会有此呗mask
-    # mask_input_postion = torch.reshape(mask_input_postion_y, (mask_input_labels.shape[0], -1))  # -1表示不指定 自己去推测,所有的mask的数据必须等长，方便后续的loss使用矩阵计算
-    mask_input_postion_y=mask_input_postion_y.numpy() #转为np好计算，不然tensor 中套tensor
-    mask_input_postion=[]
-    mask_input_value=[]
-    forntindex=0
-    rearfront=0
-    rowindex=0
-    while(forntindex<len(mask_input_postion_x)):
-        while(forntindex<len(mask_input_postion_x) and mask_input_postion_x[forntindex] ==mask_input_postion_x[rearfront]):
-            forntindex+=1
-        #获取位置
-        y_index=list(mask_input_postion_y[rearfront:forntindex])
-        mask_input_postion.append(y_index)
-        mask_input_value.append([base_input_ids[rowindex].numpy()[colindex] for colindex in y_index])
-        rearfront=forntindex
-        rowindex+=1
-    mask_input_postion=pad_sequense_python(mask_input_postion,-1) #后续计算的时候对于-1不进行计算
-    mask_input_value=pad_sequense_python(mask_input_value,-1)
-     '''
+        mask_input_labels = data_collator_output[
+            "labels"]  # 需要获取不是-100的位置，证明其未被替换，这也是target -100的位置在计算crossentropyloss 会丢弃
+        '''
+         进行遍历,获取原来的未被mask的数据,再对此进行对齐,方便后续会对此进行计算loss 在计算loss的时候 根据CrossEntropyLoss 的ingore_index 会根据target的属性，
+         直接去出某些值.不进行计算，所以不需要再进行转换
+        '''
+        '''
+        mask_input_postion_x, mask_input_postion_y = torch.where(
+            mask_input_labels != -100)  # 二维数据，结果分为2个array,按照15的% mask 每行都会有此呗mask
+        # mask_input_postion = torch.reshape(mask_input_postion_y, (mask_input_labels.shape[0], -1))  # -1表示不指定 自己去推测,所有的mask的数据必须等长，方便后续的loss使用矩阵计算
+        mask_input_postion_y=mask_input_postion_y.numpy() #转为np好计算，不然tensor 中套tensor
+        mask_input_postion=[]
+        mask_input_value=[]
+        forntindex=0
+        rearfront=0
+        rowindex=0
+        while(forntindex<len(mask_input_postion_x)):
+            while(forntindex<len(mask_input_postion_x) and mask_input_postion_x[forntindex] ==mask_input_postion_x[rearfront]):
+                forntindex+=1
+            #获取位置
+            y_index=list(mask_input_postion_y[rearfront:forntindex])
+            mask_input_postion.append(y_index)
+            mask_input_value.append([base_input_ids[rowindex].numpy()[colindex] for colindex in y_index])
+            rearfront=forntindex
+            rowindex+=1
+        mask_input_postion=pad_sequense_python(mask_input_postion,-1) #后续计算的时候对于-1不进行计算
+        mask_input_value=pad_sequense_python(mask_input_value,-1)
+         '''
 
-    # 对于model只接受tensor[list] 必须为 list[tensor] 转为tensor[list]
-    return mask_input_ids, torch.stack(
-        attention_masks), mask_input_labels, torch.tensor(nsp_labels), torch.tensor(
-        start_positions_labels), torch.tensor(end_positions_labels)
+        # 对于model只接受tensor[list] 必须把 list[tensor] 转为tensor[list]
+        return mask_input_ids, torch.stack(
+            attention_masks), torch.tensor(
+            encoded_dict_textandquestion['token_type_ids']), mask_input_labels, torch.tensor(nsp_labels), torch.tensor(
+            start_positions_labels), torch.tensor(end_positions_labels)
+    else:
+        # mask_input_labels 位置用torch.tensor(encoded_dict_textandquestion['input_ids'])代替了，这里不计算mlm的loss了
+        return torch.tensor(encoded_dict_textandquestion['input_ids']), torch.tensor(
+            encoded_dict_textandquestion['attention_mask']), \
+               torch.tensor(encoded_dict_textandquestion['token_type_ids']), torch.tensor(
+            encoded_dict_textandquestion['input_ids']), torch.tensor(nsp_labels), torch.tensor(
+            start_positions_labels), torch.tensor(end_positions_labels)
 
 
 # 把一些参数固定
-create_batch_partial = partial(create_batch, tokenizer=tokenizer, data_collator=data_collator)
+create_batch_partial = partial(create_batch, tokenizer=tokenizer, data_collator=data_collator,
+                               keyword_flag=keyword_flag)
 
 # batch_size 除以2是为了 在后面认为添加了负样本   负样本和正样本是1：1
 train_dataloader = Data.DataLoader(
@@ -214,8 +234,9 @@ def evaluate(model, eval_data_loader, epoch, tokenizer):
     eval_step = 0
     # 依次处理每批数据
     for return_batch_data in eval_data_loader:  # 一个batch一个bach的训练完所有数据
-        mask_input_ids, attention_masks, mask_input_labels, nsp_labels, start_positions_labels, end_positions_labels = return_batch_data
-        model_output = model(input_ids=mask_input_ids.to(device), attention_mask=attention_masks.to(device))
+        mask_input_ids, attention_masks, token_type_ids, mask_input_labels, nsp_labels, start_positions_labels, end_positions_labels = return_batch_data
+        model_output = model(input_ids=mask_input_ids.to(device), attention_mask=attention_masks.to(device),
+                             token_type_ids=token_type_ids.to(device))
 
         # 进行转换
         config = model.config
@@ -228,15 +249,19 @@ def evaluate(model, eval_data_loader, epoch, tokenizer):
         loss的计算
         '''
         loss_fct = CrossEntropyLoss()  # -100 index = padding token 默认就是-100
+
         '''
         mlm loss 计算
         '''
         mlm_loss = loss_fct(prediction_scores.view(-1, config.vocab_size), mask_input_labels.view(-1))
+        if not keyword_flag:
+            mlm_loss = torch.tensor(0)
 
         '''
         nsp loss 计算
         '''
         nsp_loss = loss_fct(nsp_relationship_scores.view(-1, 2), nsp_labels.view(-1))
+
 
         '''
         qa loss 计算
@@ -272,7 +297,7 @@ def evaluate(model, eval_data_loader, epoch, tokenizer):
         eval_f1_score += f1_score
     viz.line(Y=[
         (eval_mlm_loss / eval_step, eval_nsp_loss / eval_step, eval_qa_loss / eval_step, eval_total_loss / eval_step)],
-             X=[(epoch + 1, epoch + 1, epoch + 1, epoch + 1)], win="pitcure_2", update='append')
+        X=[(epoch + 1, epoch + 1, epoch + 1, epoch + 1)], win="pitcure_2", update='append')
     viz.line(Y=[(eval_em_score / eval_step, eval_f1_score / eval_step)],
              X=[(epoch + 1, epoch + 1)], win="pitcure_3", update='append')
 
@@ -299,9 +324,10 @@ for epoch in range(epoch_size):  # 所有数据迭代总的次数
     epoch_step = 0
     for step, return_batch_data in enumerate(train_dataloader):  # 一个batch一个bach的训练完所有数据
 
-        mask_input_ids, attention_masks, mask_input_labels, nsp_labels, start_positions_labels, end_positions_labels = return_batch_data
+        mask_input_ids, attention_masks, token_type_ids, mask_input_labels, nsp_labels, start_positions_labels, end_positions_labels = return_batch_data
 
-        model_output = model(input_ids=mask_input_ids.to(device), attention_mask=attention_masks.to(device))
+        model_output = model(input_ids=mask_input_ids.to(device), attention_mask=attention_masks.to(device),
+                             token_type_ids=token_type_ids.to(device))
         config = model.config
         prediction_scores = model_output.mlm_prediction_scores.to("cpu")
         nsp_relationship_scores = model_output.nsp_relationship_scores.to("cpu")
@@ -316,7 +342,8 @@ for epoch in range(epoch_size):  # 所有数据迭代总的次数
         mlm loss 计算
         '''
         mlm_loss = loss_fct(prediction_scores.view(-1, config.vocab_size), mask_input_labels.view(-1))
-
+        if not keyword_flag:
+            mlm_loss = torch.tensor(0)
         '''
         nsp loss 计算
         '''
@@ -352,8 +379,6 @@ for epoch in range(epoch_size):  # 所有数据迭代总的次数
 
     # 绘制评估函数相关数据
     evaluate(model=model, eval_data_loader=dev_dataloader, epoch=epoch, tokenizer=tokenizer)
-
-
 
     # 每5个epoch保存一次
     if (epoch + 1) % 5 == 0:
