@@ -343,6 +343,7 @@ for epoch in range(epoch_size):  # 所有数据迭代总的次数
         total_loss.backward()  # 反向传播
         print('第%d个epoch的%d批数据的loss：%f' % (epoch + 1, step + 1, total_loss))
 
+        optim.step()  # 用来更新参数，也就是的w和b的参数更新操作
     # numpy不可以直接在有梯度的数据上获取，需要先去除梯度
     # 绘制epoch以及对应的测试集损失loss 第一个参数是y  第二个是x
     viz.line(Y=[(epoch_mlm_loss / epoch_step, epoch_nsp_loss / epoch_step, epoch_qa_loss / epoch_step,
@@ -352,7 +353,7 @@ for epoch in range(epoch_size):  # 所有数据迭代总的次数
     # 绘制评估函数相关数据
     evaluate(model=model, eval_data_loader=dev_dataloader, epoch=epoch, tokenizer=tokenizer)
 
-    optim.step()  # 用来更新参数，也就是的w和b的参数更新操作
+
 
     # 每5个epoch保存一次
     if (epoch + 1) % 5 == 0:

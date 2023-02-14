@@ -14,8 +14,6 @@ from datasets import load_dataset
 
 from PraticeOfTransformers.CustomModelForNer import BertForNerAppendBiLstmAndCrf
 
-
-
 model_name = 'bert-base-chinese'
 tokenizer = AutoTokenizer.from_pretrained(model_name)
 
@@ -44,15 +42,12 @@ print(model)
 获取数据
 '''
 
-
-
-
 # 加载conll2003数据集
 
 nerdataset = Utils.convert_ner_data('data/origin/intercontest/project-1-at-2023-02-13-15-23-af00a0ee.json')
 train_data, dev_data = Data.random_split(nerdataset, [int(len(nerdataset) * 0.9),
-                                                                len(nerdataset) - int(
-                                                                    len(nerdataset) * 0.9)])
+                                                      len(nerdataset) - int(
+                                                          len(nerdataset) * 0.9)])
 task = 'ner'
 label_all_tokens = True
 
@@ -63,10 +58,12 @@ word_ids将每一个subtokens位置都对应了一个word的下标。
 比如第1个位置对应第0个word，然后第2、3个位置对应第1个word。特殊字符对应了None。
 有了这个list，我们就能将subtokens和words还有标注的labels对齐啦。
 '''
+
+
 def tokenize_and_align_labels(examples, tokenizer):
     tokens, takens_labels = zip(*examples)
     # tokens, takens_labels = examples
-    tokenized_inputs = tokenizer(tokens,  add_special_tokens=False,  truncation=True, is_split_into_words=True)
+    tokenized_inputs = tokenizer(tokens, add_special_tokens=False, truncation=True, is_split_into_words=True)
 
     labels = []
     for i, label in enumerate(takens_labels):
@@ -97,7 +94,8 @@ def tokenize_and_align_labels(examples, tokenizer):
 
 
 # 数据收集器，用于将处理好的数据输入给模型
-ner_align_data_collator = DataCollatorForTokenClassification(tokenizer)  # 他会对于一些label的空余的位置进行补齐 对于data_collator输入必须有labels属性
+ner_align_data_collator = DataCollatorForTokenClassification(
+    tokenizer)  # 他会对于一些label的空余的位置进行补齐 对于data_collator输入必须有labels属性
 # mlm_align_data_collator = DataCollatorForTokenClassification(tokenizer)   # 他会对于一些label的空余的位置进行补齐 对于data_collator输入必须有labels属性
 
 # 看是否用cpu或者gpu训练
@@ -110,7 +108,7 @@ model.to(device)
 def create_batch(data, tokenizer, ner_data_collator):
     tokenized_datasets = tokenize_and_align_labels(data, tokenizer)
     # 投喂进ner_data_collator的数据必须是数组
-    tokenized_datasets_list = [{'input_ids': i, 'token_type_ids': t,'attention_mask':a, 'labels': l} for i, t, a, l in
+    tokenized_datasets_list = [{'input_ids': i, 'token_type_ids': t, 'attention_mask': a, 'labels': l} for i, t, a, l in
                                zip(tokenized_datasets['input_ids'], tokenized_datasets['token_type_ids'],
                                    tokenized_datasets['attention_mask'], tokenized_datasets['labels'])]
     ner_data_collator_data = ner_data_collator(tokenized_datasets_list)
@@ -130,8 +128,6 @@ dev_dataloader = Data.DataLoader(
     dev_data, shuffle=True, collate_fn=create_batch_partial, batch_size=batch_size
 )
 
-
-
 for epoch in range(epoch_size):  # 所有数据迭代总的次数
 
     for step, return_batch_data in enumerate(train_dataloader):  # 一个batch一个bach的训练完所有数据
@@ -141,9 +137,11 @@ for epoch in range(epoch_size):  # 所有数据迭代总的次数
         attention_masks = return_batch_data['attention_mask']
         labels = return_batch_data['labels']
 
-        model_output = model(input_ids.to(device),token_type_ids=token_type_ids.to(device), labels=labels.to(device))
+        model_output = model(input_ids.to(device), token_type_ids=token_type_ids.to(device), labels=labels.to(device))
         config = model.config
-        prediction_scores = model_output.mlm_prediction_scores.to("cpu")
-        nsp_relationship_scores = model_output.nsp_relationship_scores.to("cpu")
-        qa_start_logits = model_output.qa_start_logits.to("cpu")
-        qa_end_logits = model_output.qa_end_logits.to("cpu")
+        loss, outputs = model_output
+        optim.zero_grad()  # 每次计算的时候需要把上次计算的梯度设置为0
+
+        print('第%d个epoch的%d批数据的loss：%f' % (epoch + 1, step + 1, loss))
+        loss.backward()  # 反向传播
+        optim.step()  # 用来更新参数，也就是的w和b的参数更新操作
