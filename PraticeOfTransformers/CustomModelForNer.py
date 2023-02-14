@@ -20,6 +20,7 @@ from transformers.utils import ModelOutput
 
 
 
+
 class NspAndQAModelOutput(ModelOutput):
     mlm_prediction_scores: torch.FloatTensor = None
     nsp_relationship_scores: torch.FloatTensor = None
@@ -41,18 +42,22 @@ class BertForNerAppendBiLstmAndCrf(BertPreTrainedModel):
         super(BertForNerAppendBiLstmAndCrf, self).__init__(config)
         self.num_labels = config.num_labels
 
-        self.bert = BertModel(config)
+        self.bert = BertModel(config) #解决问题：NER标注数据少，文本信息抽取效果不佳
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
-        self.bilstm = nn.LSTM(
-            input_size=config.pooler_fc_size,  # 和bert的输出曾 也是就pool保存一直
-            hidden_size=config.hidden_size // 2,  # 1024
+        self.bilstm = nn.LSTM(  # 解决问题：抽取用于实体分类的包含上下文的文本信息
+            input_size=config.hidden_size,  # 和bert encode的输出层 也即是隐藏层
+            hidden_size=config.hidden_size // 2,  #隐藏层的大小（即隐藏层节点数量），输出向量的维度等于隐藏节点数； 因为是双向lstm 所以除以2
             batch_first=True,
             num_layers=2,
-            dropout=0.5,  # 0.5
+            dropout=0.5,  # 0.5 默认值0，除最后一层，每一层的输出都进行dropout；
             bidirectional=True #双向
         )
-        self.classifier = nn.Linear(config.hidden_size, config.num_labels)
-        self.crf = CRF(config.num_labels, batch_first=True)
+        self.classifier = nn.Linear(in_features=config.hidden_size, out_features=config.num_labels) #得到bert+bilstm预测标签
+
+        #crf的第一个词必须是开启的，说明cls这个字符的去掉
+        self.crf = CRF(config.num_labels, batch_first=True)  #用来约束标签 实体内标签分类的一致性，T个N分类问题转化为NT的分类问题
+
+
 
         self.init_weights()
 
@@ -71,12 +76,16 @@ class BertForNerAppendBiLstmAndCrf(BertPreTrainedModel):
         # dropout pred_label的一部分feature
         lstm_output, _ = self.bilstm(sequence_output)
         padded_sequence_output = self.dropout(lstm_output)
-        # 得到判别值
+        # 得到判别值 标签的判别
         logits = self.classifier(padded_sequence_output)
         outputs = (logits,)
         if labels is not None:
-            loss_mask = labels.gt(-1)
-            loss = self.crf(logits, labels, loss_mask) * (-1)
+            loss_mask = labels.gt(-1) #作为mask 相等于pading这类的不计算 ，这里遇到问题了 我cls的标签在第一个，这里不允许
+            labels[labels==-100]=0 #这里是-100 计算会报错，设置为0，这样就在num_labels的范围内，但是loss_mask的设置在计算loss的时候是影响 loss
+            '''
+            crf 注意到这个返回值为对数似然，所以当你作为损失函数时，需要在这个值前添加负号.。默认地，这个对数似然是批上的求和。
+            '''
+            loss = self.crf(emissions=logits, tags=labels, mask=loss_mask) * (-1) #mask的作用是：因为是中文的句子 那么每句话都要padding 一定的长度 所以 告诉模型那些是padding的
             outputs = (loss,) + outputs
 
         # contain: (loss), scores
