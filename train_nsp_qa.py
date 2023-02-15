@@ -67,13 +67,16 @@ passage_keyword_json = passage_keyword_json[passage_keyword_json['q_a'].apply(la
 
 passage_keyword_json = passage_keyword_json.explode("q_a").values
 
+passage_keyword_json=passage_keyword_json[:200]
 
 sent = ['我爱北京天安门，天安门上太阳升', '我爱北京中南海，毛主席在中南还', '改革开放好，我哎深圳，深圳是改革开放先驱']
 question = ['我爱什么?', '毛主席在哪?', '谁是改革开放先驱']
 
 train_data, dev_data = Data.random_split(passage_keyword_json, [int(len(passage_keyword_json) * 0.9),
                                                                 len(passage_keyword_json) - int(
-                                                                    len(passage_keyword_json) * 0.9)])
+                                                                 len(passage_keyword_json) * 0.9)])
+
+
 
 # 创建一个实例，参数是tokenizer，如果不是batch的化，就采用tokenizer.encode_plus
 encoded_dict = tokenizer.batch_encode_plus(
@@ -161,8 +164,7 @@ def create_batch(data, tokenizer, data_collator, keyword_flag=False):
         data_collator_output = data_collator(zip(base_input_ids, encoded_dict_keywords['input_ids']))
         mask_input_ids = data_collator_output["input_ids"]
 
-        mask_input_labels = data_collator_output[
-            "labels"]  # 需要获取不是-100的位置，证明其未被替换，这也是target -100的位置在计算crossentropyloss 会丢弃
+        mask_input_labels = data_collator_output["labels"]  # 需要获取不是-100的位置，证明其未被替换，这也是target -100的位置在计算crossentropyloss 会丢弃
         '''
          进行遍历,获取原来的未被mask的数据,再对此进行对齐,方便后续会对此进行计算loss 在计算loss的时候 根据CrossEntropyLoss 的ingore_index 会根据target的属性，
          直接去出某些值.不进行计算，所以不需要再进行转换
@@ -256,7 +258,7 @@ def evaluate(model, eval_data_loader, epoch, tokenizer):
 
         # 进行转换
         config = model.config
-        prediction_scores = model_output.mlm_prediction_scores.to("cpu")
+        mlm_prediction_scores = model_output.mlm_prediction_scores.to("cpu")
         nsp_relationship_scores = model_output.nsp_relationship_scores.to("cpu")
         qa_start_logits = model_output.qa_start_logits.to("cpu")
         qa_end_logits = model_output.qa_end_logits.to("cpu")
@@ -269,7 +271,7 @@ def evaluate(model, eval_data_loader, epoch, tokenizer):
         '''
         mlm loss 计算
         '''
-        mlm_loss = loss_fct(prediction_scores.view(-1, config.vocab_size), mask_input_labels.view(-1))
+        mlm_loss = loss_fct(input=mlm_prediction_scores.view(-1, config.vocab_size), target=mask_input_labels.view(-1))
         if not keyword_flag:
             mlm_loss = torch.tensor(0)
 
@@ -286,7 +288,8 @@ def evaluate(model, eval_data_loader, epoch, tokenizer):
         end_loss = loss_fct(qa_end_logits, end_positions_labels)
         qa_loss = (start_loss + end_loss) / 2
 
-        total_loss = mlm_loss + torch.sqrt(torch.exp(nsp_loss)) * qa_loss
+        total_loss = mlm_loss + torch.sqrt(torch.exp(nsp_loss)) * qa_loss  # 目的是为了当nsp预测错了的时候 加大惩罚程度
+        #total_loss = torch.sqrt(torch.exp(nsp_loss)) * qa_loss  # 目的是为了当nsp预测错了的时候 加大惩罚程度
 
         '''
         实际预测值与目标值的
@@ -300,6 +303,9 @@ def evaluate(model, eval_data_loader, epoch, tokenizer):
         qa_metric = Utils.get_eval(pred_arr=qa_predict, target_arr=qa_target)
         em_score = qa_metric['EM']
         f1_score = qa_metric['F1']
+
+        print('--eval---epoch次数:%d---em得分: %.6f - f1得分: %.6f--nsp损失函数: %.6f--qa损失函数: %.6f- total损失函数: %.6f'
+              %(epoch ,em_score, f1_score, nsp_loss,qa_loss,total_loss.detach()))
         # 损失函数的平均值
         # 按照概率最大原则，计算单字的标签编号
         # argmax计算logits中最大元素值的索引，从0开始
@@ -311,7 +317,7 @@ def evaluate(model, eval_data_loader, epoch, tokenizer):
         eval_total_loss += total_loss.detach()
         eval_em_score += em_score
         eval_f1_score += f1_score
-        print('--eval---epoch次数:%d---em得分: %.6f - f1得分: %.6f- 损失函数: %.6f' %(epoch ,em_score, eval_f1_score, total_loss))
+
     viz.line(Y=[
         (eval_mlm_loss / eval_step, eval_nsp_loss / eval_step, eval_qa_loss / eval_step, eval_total_loss / eval_step)],
         X=[(epoch + 1, epoch + 1, epoch + 1, epoch + 1)], win="pitcure_2", update='append')
@@ -336,7 +342,7 @@ for epoch in range(epoch_size):  # 所有数据迭代总的次数
         model_output = model(input_ids=mask_input_ids.to(device), attention_mask=attention_masks.to(device),
                              token_type_ids=token_type_ids.to(device))
         config = model.config
-        prediction_scores = model_output.mlm_prediction_scores.to("cpu")
+        mlm_prediction_scores = model_output.mlm_prediction_scores.to("cpu")
         nsp_relationship_scores = model_output.nsp_relationship_scores.to("cpu")
         qa_start_logits = model_output.qa_start_logits.to("cpu")
         qa_end_logits = model_output.qa_end_logits.to("cpu")
@@ -348,7 +354,7 @@ for epoch in range(epoch_size):  # 所有数据迭代总的次数
         '''
         mlm loss 计算
         '''
-        mlm_loss = loss_fct(prediction_scores.view(-1, config.vocab_size), mask_input_labels.view(-1))
+        mlm_loss = loss_fct(mlm_prediction_scores.view(-1, config.vocab_size), mask_input_labels.view(-1))
         if not keyword_flag:
             mlm_loss = torch.tensor(0)
         '''
@@ -364,6 +370,7 @@ for epoch in range(epoch_size):  # 所有数据迭代总的次数
         qa_loss = (start_loss + end_loss) / 2
 
         total_loss = mlm_loss + torch.sqrt(torch.exp(nsp_loss)) * qa_loss  # 目的是为了当nsp预测错了的时候 加大惩罚程度
+        #total_loss = torch.sqrt(torch.exp(nsp_loss)) * qa_loss  # 目的是为了当nsp预测错了的时候 加大惩罚程度
 
         # 进行统计展示
         epoch_step += 1

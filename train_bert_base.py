@@ -47,7 +47,7 @@ passage_keyword_json = pd.read_json("./data/origin/intercontest/passage_qa_keywo
 passage_keyword_json = passage_keyword_json[passage_keyword_json['q_a'].apply(lambda x: len(x) >= 1)]
 
 passage_keyword_json = passage_keyword_json.explode("q_a").values
-passage_keyword_json=passage_keyword_json[:10]
+
 train_data, dev_data = Data.random_split(passage_keyword_json, [int(len(passage_keyword_json) * 0.9),
                                                                 len(passage_keyword_json) - int(
                                                                     len(passage_keyword_json) * 0.9)])
