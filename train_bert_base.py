@@ -47,7 +47,7 @@ passage_keyword_json = pd.read_json("./data/origin/intercontest/passage_qa_keywo
 passage_keyword_json = passage_keyword_json[passage_keyword_json['q_a'].apply(lambda x: len(x) >= 1)]
 
 passage_keyword_json = passage_keyword_json.explode("q_a").values
-
+passage_keyword_json=passage_keyword_json[:10]
 train_data, dev_data = Data.random_split(passage_keyword_json, [int(len(passage_keyword_json) * 0.9),
                                                                 len(passage_keyword_json) - int(
                                                                     len(passage_keyword_json) * 0.9)])
@@ -112,10 +112,7 @@ dev_dataloader = Data.DataLoader(
     dev_data, shuffle=True, collate_fn=create_batch_partial, batch_size=batch_size
 )
 
-# 实例化相关metrics的计算对象
-model_recall = torchmetrics.Recall(task='binary', average='macro', num_classes=2)
-model_precision = torchmetrics.Precision(task='binary', average='macro', num_classes=2)
-model_f1 = torchmetrics.F1Score(task='binary', average="macro", num_classes=2)
+
 
 # 看是否用cpu或者gpu训练
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -123,8 +120,16 @@ print("-----------------------------------训练模式为%s---------------------
 model.to(device)
 
 
+viz = Visdom(env=u'bert_base_special_train')  # 可视化
+name = ['mlm_loss', 'nsp_loss', 'total_loss']
+viz.line(Y=[(0., 0., 0.)], X=[(0., 0., 0.)], win="pitcure_1",
+         opts=dict(title='train_loss', legend=name, xlabel='epoch', ylabel='loss', markers=False))  # 绘制起始位置 #win指的是图形id
+viz.line(Y=[(0., 0., 0.)], X=[(0., 0., 0.)], win="pitcure_2",
+         opts=dict(title='eval_loss', legend=name, xlabel='epoch', ylabel='loss', markers=False))  # 绘制起始位置
+
+
 #  评估函数，用作训练一轮，评估一轮使用
-def evaluate(model, eval_data_loader, epoch, tokenizer):
+def evaluate(model, eval_data_loader, epoch):
     eval_mlm_loss = 0
     eval_nsp_loss = 0
     eval_qa_loss = 0
@@ -134,10 +139,10 @@ def evaluate(model, eval_data_loader, epoch, tokenizer):
     eval_step = 0
     # 依次处理每批数据
     for return_batch_data in eval_data_loader:  # 一个batch一个bach的训练完所有数据
-        mask_input_ids, attention_masks, token_type_ids, mask_input_labels, nsp_labels, start_positions_labels, end_positions_labels = return_batch_data
+        mask_input_ids, attention_masks, token_type_ids, mask_input_labels, nsp_labels = return_batch_data
+
         model_output = model(input_ids=mask_input_ids.to(device), attention_mask=attention_masks.to(device),
                              token_type_ids=token_type_ids.to(device))
-
         model_config = model.config
 
         prediction_logits = model_output['prediction_logits'].to("cpu")
@@ -178,18 +183,12 @@ def evaluate(model, eval_data_loader, epoch, tokenizer):
     viz.line(Y=[
         (eval_mlm_loss / eval_step, eval_nsp_loss / eval_step, eval_qa_loss / eval_step, eval_total_loss / eval_step)],
         X=[(epoch + 1, epoch + 1, epoch + 1, epoch + 1)], win="pitcure_2", update='append')
-    viz.line(Y=[(eval_em_score / eval_step, eval_f1_score / eval_step)],
-             X=[(epoch + 1, epoch + 1)], win="pitcure_3", update='append')
+
 
     print('--eval---eopch: %d ---- 损失函数: %.6f' % (epoch, total_loss))
 
 
-viz = Visdom(env=u'base_bert_special_train')  # 可视化
-name = ['mlm_loss', 'nsp_loss', 'total_loss']
-viz.line(Y=[(0., 0., 0.)], X=[(0., 0., 0.)], win="pitcure_1",
-         opts=dict(title='train_loss', legend=name, xlabel='epoch', ylabel='loss', markers=False))  # 绘制起始位置 #win指的是图形id
-viz.line(Y=[(0., 0., 0.)], X=[(0., 0., 0.)], win="pitcure_2",
-         opts=dict(title='eval_loss', legend=name, xlabel='epoch', ylabel='loss', markers=False))  # 绘制起始位置
+
 
 # 进行训练
 for epoch in range(epoch_size):  # 所有数据迭代总的次数
@@ -243,10 +242,10 @@ for epoch in range(epoch_size):  # 所有数据迭代总的次数
     # 绘制epoch以及对应的测试集损失loss 第一个参数是y  第二个是x
     viz.line(Y=[(epoch_mlm_loss / epoch_step, epoch_nsp_loss / epoch_step,
                  epoch_total_loss / epoch_step)],
-             X=[(epoch + 1, epoch + 1, epoch + 1, epoch + 1)], win="pitcure_1", update='append')
+             X=[(epoch + 1, epoch + 1, epoch + 1)], win="pitcure_1", update='append')
 
     # 绘制评估函数相关数据
-    evaluate(model=model, eval_data_loader=dev_dataloader, epoch=epoch, tokenizer=tokenizer)
+    evaluate(model=model, eval_data_loader=dev_dataloader, epoch=epoch)
 
     # 每5个epoch保存一次
     if (epoch + 1) % 5 == 0:
