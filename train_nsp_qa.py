@@ -67,7 +67,7 @@ passage_keyword_json = passage_keyword_json[passage_keyword_json['q_a'].apply(la
 
 passage_keyword_json = passage_keyword_json.explode("q_a").values
 
-passage_keyword_json=passage_keyword_json[:200]
+
 
 sent = ['我爱北京天安门，天安门上太阳升', '我爱北京中南海，毛主席在中南还', '改革开放好，我哎深圳，深圳是改革开放先驱']
 question = ['我爱什么?', '毛主席在哪?', '谁是改革开放先驱']
