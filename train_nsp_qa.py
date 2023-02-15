@@ -304,7 +304,7 @@ def evaluate(model, eval_data_loader, epoch, tokenizer):
     print('--eval---eopch: %d --em得分: %.6f - f1得分: %.6f- 损失函数: %.6f' % (epoch, em_score, f1_score, total_loss))
 
 
-viz = Visdom(env=u'origin_train')  # 可视化
+viz = Visdom(env=u'qa_origin_train')  # 可视化
 name = ['mlm_loss', 'nsp_loss', 'qa_loss', 'total_loss']
 name_em_f1 = ['em_score', 'f1_score']
 viz.line(Y=[(0., 0., 0., 0.)], X=[(0., 0., 0., 0.)], win="pitcure_1",
