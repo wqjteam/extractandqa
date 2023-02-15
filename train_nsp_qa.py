@@ -21,12 +21,11 @@ import sys
 
 model_name = 'bert-base-chinese'
 tokenizer = AutoTokenizer.from_pretrained(model_name)
-model = BertForUnionNspAndQA.from_pretrained(model_name, num_labels=2)  # num_labels 测试用一下，看看参数是否传递
+
 
 batch_size = 2
 epoch_size = 1000
-# 用于梯度回归
-optim = Adam(model.parameters(), lr=5e-5)  # 需要填写模型的参数
+
 print('--------------------sys.argv:%s-------------------' % (','.join(sys.argv)))
 if len(sys.argv) >= 2:
     batch_size = int(sys.argv[1])
@@ -46,10 +45,15 @@ keyword_flag = False
 if len(sys.argv) >= 5 and sys.argv[4] == 'True':
     keyword_flag = True
 
-
+#获取模型路径
 if len(sys.argv) >= 6:
     mode_path = sys.argv[5]
-    model = BertForUnionNspAndQA.from_pretrained(mode_path, num_labels=2)
+
+
+model = BertForUnionNspAndQA.from_pretrained(model_name, num_labels=2)  # num_labels 测试用一下，看看参数是否传递
+
+# 用于梯度回归
+optim = Adam(model.parameters(), lr=5e-5)  # 需要填写模型的参数
 '''
 获取数据
 '''
@@ -62,6 +66,7 @@ passage_keyword_json = passage_keyword_json[passage_keyword_json['q_a'].apply(la
 # passage_keyword_json = passage_keyword_json[passage_keyword_json['sentence'].apply(lambda x: '长治市博物馆，' in x)]
 
 passage_keyword_json = passage_keyword_json.explode("q_a").values
+
 
 sent = ['我爱北京天安门，天安门上太阳升', '我爱北京中南海，毛主席在中南还', '改革开放好，我哎深圳，深圳是改革开放先驱']
 question = ['我爱什么?', '毛主席在哪?', '谁是改革开放先驱']
@@ -212,15 +217,26 @@ dev_dataloader = Data.DataLoader(
     dev_data, shuffle=True, collate_fn=create_batch_partial, batch_size=batch_size
 )
 
-# 实例化相关metrics的计算对象
-model_recall = torchmetrics.Recall(task='binary', average='macro', num_classes=2)
-model_precision = torchmetrics.Precision(task='binary', average='macro', num_classes=2)
-model_f1 = torchmetrics.F1Score(task='binary', average="macro", num_classes=2)
 
 # 看是否用cpu或者gpu训练
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print("-----------------------------------训练模式为%s------------------------------------" % device)
 model.to(device)
+
+'''
+可视化
+'''
+viz = Visdom(env=u'qa_%s_train'%model_name)
+name = ['mlm_loss', 'nsp_loss', 'qa_loss', 'total_loss']
+name_em_f1 = ['em_score', 'f1_score']
+viz.line(Y=[(0., 0., 0., 0.)], X=[(0., 0., 0., 0.)], win="pitcure_1",
+         opts=dict(title='train_loss', legend=name, xlabel='epoch', ylabel='loss', markers=False))  # 绘制起始位置 #win指的是图形id
+viz.line(Y=[(0., 0., 0., 0.)], X=[(0., 0., 0., 0.)], win="pitcure_2",
+         opts=dict(title='eval_loss', legend=name, xlabel='epoch', ylabel='loss', markers=False))  # 绘制起始位置
+viz.line(Y=[(0., 0.)], X=[(0., 0.)], win="pitcure_3",
+         opts=dict(title='eval_em_f1', legend=name_em_f1, xlabel='epoch', ylabel='score(100分制)',
+                   markers=False))  # 绘制起始位置
+
 
 
 #  评估函数，用作训练一轮，评估一轮使用
@@ -295,25 +311,16 @@ def evaluate(model, eval_data_loader, epoch, tokenizer):
         eval_total_loss += total_loss.detach()
         eval_em_score += em_score
         eval_f1_score += f1_score
+        print('--eval---epoch次数:%d---em得分: %.6f - f1得分: %.6f- 损失函数: %.6f' %(epoch ,em_score, eval_f1_score, total_loss))
     viz.line(Y=[
         (eval_mlm_loss / eval_step, eval_nsp_loss / eval_step, eval_qa_loss / eval_step, eval_total_loss / eval_step)],
         X=[(epoch + 1, epoch + 1, epoch + 1, epoch + 1)], win="pitcure_2", update='append')
     viz.line(Y=[(eval_em_score / eval_step, eval_f1_score / eval_step)],
              X=[(epoch + 1, epoch + 1)], win="pitcure_3", update='append')
 
-    print('--eval---eopch: %d --em得分: %.6f - f1得分: %.6f- 损失函数: %.6f' % (epoch, em_score, f1_score, total_loss))
 
 
-viz = Visdom(env=u'qa_origin_train')  # 可视化
-name = ['mlm_loss', 'nsp_loss', 'qa_loss', 'total_loss']
-name_em_f1 = ['em_score', 'f1_score']
-viz.line(Y=[(0., 0., 0., 0.)], X=[(0., 0., 0., 0.)], win="pitcure_1",
-         opts=dict(title='train_loss', legend=name, xlabel='epoch', ylabel='loss', markers=False))  # 绘制起始位置 #win指的是图形id
-viz.line(Y=[(0., 0., 0., 0.)], X=[(0., 0., 0., 0.)], win="pitcure_2",
-         opts=dict(title='eval_loss', legend=name, xlabel='epoch', ylabel='loss', markers=False))  # 绘制起始位置
-viz.line(Y=[(0., 0.)], X=[(0., 0.)], win="pitcure_3",
-         opts=dict(title='eval_em_f1', legend=name_em_f1, xlabel='epoch', ylabel='score(100分制)',
-                   markers=False))  # 绘制起始位置
+
 
 # 进行训练
 for epoch in range(epoch_size):  # 所有数据迭代总的次数

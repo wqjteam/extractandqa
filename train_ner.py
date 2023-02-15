@@ -1,12 +1,15 @@
+import sys
 from functools import partial
 
 import pandas as pd
 import torch
 import torchmetrics
+from torch.nn import CrossEntropyLoss
 from torch.optim import AdamW
 from transformers import AutoTokenizer, DataCollatorForTokenClassification
 import torch.utils.data as Data
 from transformers.data.data_collator import tolist
+from visdom import Visdom
 
 from PraticeOfTransformers import CustomModelForNer, Utils
 from PraticeOfTransformers.CustomModelForNSPQA import BertForUnionNspAndQA
@@ -16,6 +19,13 @@ from PraticeOfTransformers.CustomModelForNer import BertForNerAppendBiLstmAndCrf
 
 model_name = 'bert-base-chinese'
 tokenizer = AutoTokenizer.from_pretrained(model_name)
+if len(sys.argv) >= 2:
+    batch_size = int(sys.argv[1])
+if len(sys.argv) >= 3:
+    epoch_size = int(sys.argv[2])
+#获取模型路径
+if len(sys.argv) >= 4 :
+    model_name=sys.argv[3]
 
 ner_id_label = {0: 'O', 1: 'B-ORG', 2: 'M-ORG', 3: 'E-ORG', 4: 'B-LOC', 5: 'M-LOC', 6: 'E-LOC', 7: 'B-PER',
                 8: 'M-PER', 9: 'E-PER', 10: 'B-Time', 11: 'M-Time', 12: 'E-Time', 13: 'B-Book', 14: 'M-Book',
@@ -30,12 +40,7 @@ epoch_size = 10
 # 用于梯度回归
 optim = AdamW(model.parameters(), lr=5e-5)  # 需要填写模型的参数
 
-# model = BertForUnionNspAndQA.from_pretrained(model_name)
 print(model)
-# data_collator = DataCollatorForLanguageModelingSpecial(tokenizer=tokenizer,
-#                                                              mlm=True,
-#                                                              mlm_probability=0.15,
-#                                                              return_tensors="pt")
 
 
 '''
@@ -48,7 +53,7 @@ nerdataset = Utils.convert_ner_data('data/origin/intercontest/project-1-at-2023-
 train_data, dev_data = Data.random_split(nerdataset, [int(len(nerdataset) * 0.9),
                                                       len(nerdataset) - int(
                                                           len(nerdataset) * 0.9)])
-task = 'ner'
+
 label_all_tokens = True
 
 '''
@@ -103,7 +108,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 print("-----------------------------------训练模式为%s------------------------------------" % device)
 model.to(device)
-
+model.train()
 
 def create_batch(data, tokenizer, ner_data_collator):
     tokenized_datasets = tokenize_and_align_labels(data, tokenizer)
@@ -127,9 +132,92 @@ train_dataloader = Data.DataLoader(
 dev_dataloader = Data.DataLoader(
     dev_data, shuffle=True, collate_fn=create_batch_partial, batch_size=batch_size
 )
-model.train()
+
+
+
+
+# 实例化相关metrics的计算对象
+model_recall = torchmetrics.Recall(task='multiclass', average='macro', num_classes=len(ner_id_label)).to(device)
+model_precision = torchmetrics.Precision(task='multiclass', average='macro', num_classes=len(ner_id_label)).to(device)
+model_f1 = torchmetrics.F1Score(task='multiclass', average="macro", num_classes=len(ner_id_label)).to(device)
+
+viz = Visdom(env=u'ner_%s_train'%(model_name))
+name = ['total_loss']
+name_precision_recall_f1 = ['precision_score','recall_score', 'f1_score']
+viz.line(Y=[(0.)], X=[(0.)], win="pitcure_1",
+         opts=dict(title='train_loss', legend=name, xlabel='epoch', ylabel='loss', markers=False))  # 绘制起始位置 #win指的是图形id
+viz.line(Y=[(0.)], X=[(0.)], win="pitcure_2",
+         opts=dict(title='eval_loss', legend=name, xlabel='epoch', ylabel='loss', markers=False))  # 绘制起始位置
+viz.line(Y=[(0., 0.)], X=[(0., 0.)], win="pitcure_3",
+         opts=dict(title='eval_precision_recall_f1', legend=name_precision_recall_f1, xlabel='epoch', ylabel='score',
+                   markers=False))  # 绘制起始位置
+
+
+
+
+
+
+
+#  评估函数，用作训练一轮，评估一轮使用
+def evaluate(model, eval_data_loader, epoch):
+    #评估之前将其重置
+    eval_total_loss = 0
+    eval_step = 0
+    # 依次处理每批数据
+    for return_batch_data in eval_data_loader:  # 一个batch一个bach的训练完所有数据
+
+        input_ids = return_batch_data['input_ids']
+        token_type_ids = return_batch_data['token_type_ids']
+        attention_masks = return_batch_data['attention_mask']
+        labels = return_batch_data['labels']
+
+        model_output = model(input_ids.to(device), token_type_ids=token_type_ids.to(device), labels=labels.to(device))
+        config = model.config
+        loss, outputs = model_output
+        predict=torch.argmax(outputs,dim=2)
+
+        '''
+        update 是计算当个batch的值  compute计算所有累加的值
+        '''
+        precision_score=model_precision(predict, labels.to(device))
+        model_precision.update(predict, labels.to(device))
+        recall_score=model_recall(predict, labels.to(device))
+        model_recall.update(predict, labels.to(device))
+        f1_score=model_f1(predict, labels.to(device))
+        model_f1.update(predict, labels.to(device))
+
+
+        # 损失函数的平均值
+        # 按照概率最大原则，计算单字的标签编号
+        # argmax计算logits中最大元素值的索引，从0开始
+        # 进行统计展示
+        eval_step += 1
+
+
+        eval_total_loss += loss.detach().to('cpu')
+
+        print('--eval---eopch: %d --precision得分: %.6f--recall得分: %.6f--- f1得分: %.6f- 损失函数: %.6f' % ( epoch, precision_score, recall_score,f1_score, total_loss))
+    viz.line(Y=[eval_total_loss / eval_step], X=[epoch + 1], win="pitcure_2", update='append')
+    viz.line(Y=[(model_precision.compute().to('cpu'), model_recall.compute().to('cpu') ,model_f1.compute().to('cpu'))],
+             X=[(epoch + 1, epoch + 1, epoch + 1)], win="pitcure_3", update='append')
+    model_precision.reset()
+    model_recall.reset()
+    model_f1.reset()
+
+
+
+
+
+
+
+
+
+
+
 for epoch in range(epoch_size):  # 所有数据迭代总的次数
 
+    total_loss=0
+    total_step=0
     for step, return_batch_data in enumerate(train_dataloader):  # 一个batch一个bach的训练完所有数据
 
         input_ids = return_batch_data['input_ids']
@@ -142,6 +230,13 @@ for epoch in range(epoch_size):  # 所有数据迭代总的次数
         loss, outputs = model_output
         optim.zero_grad()  # 每次计算的时候需要把上次计算的梯度设置为0
 
+        total_step+=1
+        total_loss+=loss.detach().cpu()
+
+
         print('第%d个epoch的%d批数据的loss：%f' % (epoch + 1, step + 1, loss))
+        viz.line(Y=[total_loss / total_step],X=[ epoch + 1], win="pitcure_1", update='append')
+
+        evaluate(model, dev_dataloader, epoch)
         loss.backward()  # 反向传播
         optim.step()  # 用来更新参数，也就是的w和b的参数更新操作
