@@ -29,7 +29,7 @@ if len(sys.argv) >= 4 :
 
 ner_id_label = {0: 'O', 1: 'B-ORG', 2: 'M-ORG', 3: 'E-ORG', 4: 'B-LOC', 5: 'M-LOC', 6: 'E-LOC', 7: 'B-PER',
                 8: 'M-PER', 9: 'E-PER', 10: 'B-Time', 11: 'M-Time', 12: 'E-Time', 13: 'B-Book', 14: 'M-Book',
-                15: 'E-Book'}
+                15: 'E-Book',16:'I-ORG',17:'I-LOC',18:'I-PER',19:'I-Time',20:'I-Book'}
 ner_label_id = {}
 for key in ner_id_label:
     ner_label_id[ner_id_label[key]] = key
