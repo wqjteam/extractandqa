@@ -164,7 +164,24 @@ def read_file(self, file_path):
     return samples
 
 
-#从json抓内text label的格式
+#
+'''
+从json转换text label的格式
+有两套标签
+BIO标注方案
+
+B 表示Begin，命名实体的第一个字
+I 表示 Inside，命名实体中除了第一个字以外的其他字
+O 表示 Outside，不属于命名实体
+
+BIOES标注方案
+
+B 表示Begin，命名实体的第一个字
+I 表示Inside，命名实体中除了第一个字和最后一个字以外的其他字
+O 表示Outside，不属于命名实体
+E 表示End，命名实体的最后一个字
+S 表示Single，仅由一个字组成的命名实体
+'''
 def convert_ner_data(file_path):
     """
     file_path: 通过Label Studio导出的csv文件
@@ -189,9 +206,13 @@ def convert_ner_data(file_path):
                 start = label_item['start']
                 end = label_item['end']
                 label = label_item['labels'][0]
-                label_list[start] = f'B-{label}'
-                label_list[start+1:end-1] = [f'M-{label}' for i in range(end-start-2)]
-                label_list[end - 1] = f'E-{label}'
+
+                if end-start==1:
+                    label_list[start] = f'S-{label}'                 # 属于单个单词构成的实体
+                else:
+                    label_list[start] = f'B-{label}'
+                    label_list[start+1:end-1] = [f'I-{label}' for i in range(end-start-2)]
+                    label_list[end - 1] = f'E-{label}'
         assert len(label_list) == len(text_list)
         text_label_tuple.append((text_list,label_list))
 
