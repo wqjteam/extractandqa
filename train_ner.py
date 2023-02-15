@@ -127,7 +127,7 @@ train_dataloader = Data.DataLoader(
 dev_dataloader = Data.DataLoader(
     dev_data, shuffle=True, collate_fn=create_batch_partial, batch_size=batch_size
 )
-
+model.train()
 for epoch in range(epoch_size):  # 所有数据迭代总的次数
 
     for step, return_batch_data in enumerate(train_dataloader):  # 一个batch一个bach的训练完所有数据
