@@ -48,6 +48,8 @@ passage_keyword_json = passage_keyword_json[passage_keyword_json['q_a'].apply(la
 
 passage_keyword_json = passage_keyword_json.explode("q_a").values
 
+
+
 train_data, dev_data = Data.random_split(passage_keyword_json, [int(len(passage_keyword_json) * 0.9),
                                                                 len(passage_keyword_json) - int(
                                                                     len(passage_keyword_json) * 0.9)])
@@ -132,7 +134,6 @@ viz.line(Y=[(0., 0., 0.)], X=[(0., 0., 0.)], win="pitcure_2",
 def evaluate(model, eval_data_loader, epoch):
     eval_mlm_loss = 0
     eval_nsp_loss = 0
-    eval_qa_loss = 0
     eval_total_loss = 0
     eval_em_score = 0
     eval_f1_score = 0
@@ -179,13 +180,13 @@ def evaluate(model, eval_data_loader, epoch):
         eval_mlm_loss += masked_lm_loss.detach()
         eval_nsp_loss += next_sentence_loss.detach()
         eval_total_loss += total_loss.detach()
+        print('--eval---eopch: %d----mlm_loss: %f----的nsp_loss: %f------ 损失函数: %.6f' % (epoch, masked_lm_loss, next_sentence_loss , total_loss ))
 
     viz.line(Y=[
-        (eval_mlm_loss / eval_step, eval_nsp_loss / eval_step, eval_qa_loss / eval_step, eval_total_loss / eval_step)],
-        X=[(epoch + 1, epoch + 1, epoch + 1, epoch + 1)], win="pitcure_2", update='append')
+        (eval_mlm_loss / eval_step, eval_nsp_loss / eval_step, eval_total_loss / eval_step)],
+        X=[(epoch + 1, epoch + 1, epoch + 1)], win="pitcure_2", update='append')
 
 
-    print('--eval---eopch: %d ---- 损失函数: %.6f' % (epoch, total_loss))
 
 
 
