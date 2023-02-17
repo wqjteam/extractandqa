@@ -11,12 +11,12 @@ from torch import nn
 from torch.nn import CrossEntropyLoss
 from torch.optim import AdamW, Adam
 from visdom import Visdom
-from transformers import AutoTokenizer, DataCollatorForLanguageModeling
+from transformers import AutoTokenizer, DataCollatorForLanguageModeling, AutoConfig
 
 import CommonUtil
 from PraticeOfTransformers import Utils
 from PraticeOfTransformers.DataCollatorForLanguageModelingSpecial import DataCollatorForLanguageModelingSpecial
-from PraticeOfTransformers.CustomModelForNSPQA import BertForUnionNspAndQA
+from PraticeOfTransformers.CustomModelForNSPQA import BertForUnionNspAndQA, NspAndQAConfig
 from PraticeOfTransformers.DataCollatorForWholeWordMaskOriginal import DataCollatorForWholeWordMaskOriginal
 from PraticeOfTransformers.DataCollatorForWholeWordMaskSpecial import DataCollatorForWholeWordMaskSpecial
 import sys
@@ -47,14 +47,20 @@ keyword_flag = False
 if len(sys.argv) >= 5 and sys.argv[4] == 'True':
     keyword_flag = True
 
-model = BertForUnionNspAndQA.from_pretrained(model_name, num_labels=2)  # num_labels 测试用一下，看看参数是否传递
+
 
 
 
 #获取模型路径
 if len(sys.argv) >= 6:
-    model.load_state_dict( torch.load(sys.argv[5]))
 
+    config = AutoConfig.from_pretrained(model_name, num_labels=2)
+    model = BertForUnionNspAndQA(config)
+    #因为后面的参数没有初始化，所以采用非强制性约束
+    model.load_state_dict( torch.load(sys.argv[5]),strict=False)
+else:
+    ##完全继承
+    model = BertForUnionNspAndQA.from_pretrained(model_name, num_labels=2)  # num_labels 测试用一下，看看参数是否传递
 
 
 
