@@ -228,7 +228,11 @@ dev_dataloader = Data.DataLoader(
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print("-----------------------------------训练模式为%s------------------------------------" % device)
 
-model = nn.DataParallel(model)
+if torch.cuda.device_count() > 1:
+    device_ids = list(range(torch.cuda.device_count()))
+    model = nn.DataParallel(model,device_ids=device_ids)
+
+
 model.to(device)
 '''
 可视化

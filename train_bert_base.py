@@ -20,7 +20,7 @@ from PraticeOfTransformers.DataCollatorForWholeWordMaskSpecial import DataCollat
 model_name = 'bert-base-chinese'
 tokenizer = AutoTokenizer.from_pretrained(model_name)
 model = AutoModelForPreTraining.from_pretrained(model_name, num_labels=2)  # num_labels 测试用一下，看看参数是否传递
-os.environ['CUDA_VISIBLE_DEVICES'] = '0,1' #指定GPU编号 多gpu训练
+
 batch_size = 2
 epoch_size = 1000
 # 用于梯度回归
@@ -121,9 +121,12 @@ dev_dataloader = Data.DataLoader(
 # 看是否用cpu或者gpu训练
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print("-----------------------------------训练模式为%s------------------------------------" % device)
-model = nn.DataParallel(model)
-model.to(device)
 
+if torch.cuda.device_count() > 1:
+    device_ids = list(range(torch.cuda.device_count()))
+    model = nn.DataParallel(model,device_ids=device_ids)
+
+model.to(device)
 
 viz = Visdom(env=u'bert_base_special_train')  # 可视化
 name = ['mlm_loss', 'nsp_loss', 'total_loss']
