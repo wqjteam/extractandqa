@@ -119,7 +119,7 @@ dev_dataloader = Data.DataLoader(
 
 
 # 看是否用cpu或者gpu训练
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 print("-----------------------------------训练模式为%s------------------------------------" % device)
 
 if torch.cuda.device_count() > 1:
