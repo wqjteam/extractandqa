@@ -49,6 +49,8 @@ if len(sys.argv) >= 5 and sys.argv[4] == 'True':
 
 model = BertForUnionNspAndQA.from_pretrained(model_name, num_labels=2)  # num_labels 测试用一下，看看参数是否传递
 
+
+
 #获取模型路径
 if len(sys.argv) >= 6:
     model.load_state_dict( torch.load(sys.argv[5]))
@@ -230,8 +232,8 @@ print("-----------------------------------训练模式为%s---------------------
 
 if torch.cuda.device_count() > 1:
     device_ids = list(range(torch.cuda.device_count()))
-    model = nn.DataParallel(model,device_ids=device_ids)
 
+    model = nn.DataParallel(model,device_ids=device_ids)
 
 model.to(device)
 '''
@@ -266,7 +268,10 @@ def evaluate(model, eval_data_loader, epoch, tokenizer):
                              token_type_ids=token_type_ids.to(device))
 
         # 进行转换
-        config = model.config
+        if torch.cuda.is_available() and torch.cuda.device_count() > 1:
+            model_config=model.module.config
+        else:
+            model_config = model.config
         mlm_prediction_scores = model_output.mlm_prediction_scores.to("cpu")
         nsp_relationship_scores = model_output.nsp_relationship_scores.to("cpu")
         qa_start_logits = model_output.qa_start_logits.to("cpu")
@@ -280,7 +285,7 @@ def evaluate(model, eval_data_loader, epoch, tokenizer):
         '''
         mlm loss 计算
         '''
-        mlm_loss = loss_fct(input=mlm_prediction_scores.view(-1, config.vocab_size), target=mask_input_labels.view(-1))
+        mlm_loss = loss_fct(input=mlm_prediction_scores.view(-1, model_config.vocab_size), target=mask_input_labels.view(-1))
         if not keyword_flag:
             mlm_loss = torch.tensor(0)
 
@@ -350,7 +355,10 @@ for epoch in range(epoch_size):  # 所有数据迭代总的次数
 
         model_output = model(input_ids=mask_input_ids.to(device), attention_mask=attention_masks.to(device),
                              token_type_ids=token_type_ids.to(device))
-        config = model.config
+        if torch.cuda.is_available() and torch.cuda.device_count() > 1:
+            model_config = model.module.config
+        else:
+            model_config = model.config
         mlm_prediction_scores = model_output.mlm_prediction_scores.to("cpu")
         nsp_relationship_scores = model_output.nsp_relationship_scores.to("cpu")
         qa_start_logits = model_output.qa_start_logits.to("cpu")
@@ -363,7 +371,7 @@ for epoch in range(epoch_size):  # 所有数据迭代总的次数
         '''
         mlm loss 计算
         '''
-        mlm_loss = loss_fct(mlm_prediction_scores.view(-1, config.vocab_size), mask_input_labels.view(-1))
+        mlm_loss = loss_fct(mlm_prediction_scores.view(-1, model_config.vocab_size), mask_input_labels.view(-1))
         if not keyword_flag:
             mlm_loss = torch.tensor(0)
         '''

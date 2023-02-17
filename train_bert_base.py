@@ -122,11 +122,11 @@ dev_dataloader = Data.DataLoader(
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 print("-----------------------------------训练模式为%s------------------------------------" % device)
 
-if torch.cuda.device_count() > 1:
+if torch.cuda.is_available() and torch.cuda.device_count() > 1:
     device_ids = list(range(torch.cuda.device_count()))
-    print('111111111111111111111111111111111')
+
     model = nn.DataParallel(model,device_ids=device_ids)
-print('22222222222222222222222222222222222')
+
 model.to(device)
 
 viz = Visdom(env=u'bert_base_special_train')  # 可视化
@@ -151,7 +151,7 @@ def evaluate(model, eval_data_loader, epoch):
 
         model_output = model(input_ids=mask_input_ids.to(device), attention_mask=attention_masks.to(device),
                              token_type_ids=token_type_ids.to(device))
-        if torch.cuda.device_count() > 1:
+        if torch.cuda.is_available() and torch.cuda.device_count() > 1:
             model_config=model.module.config
         else:
             model_config = model.config
@@ -213,7 +213,7 @@ for epoch in range(epoch_size):  # 所有数据迭代总的次数
 
         model_output = model(input_ids=mask_input_ids.to(device), attention_mask=attention_masks.to(device),
                              token_type_ids=token_type_ids.to(device))
-        if torch.cuda.device_count() > 1:
+        if torch.cuda.is_available() and torch.cuda.device_count() > 1:
             model_config = model.module.config
         else:
             model_config = model.config
