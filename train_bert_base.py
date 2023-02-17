@@ -213,7 +213,10 @@ for epoch in range(epoch_size):  # 所有数据迭代总的次数
 
         model_output = model(input_ids=mask_input_ids.to(device), attention_mask=attention_masks.to(device),
                              token_type_ids=token_type_ids.to(device))
-        model_config = model.config
+        if torch.cuda.device_count() > 1:
+            model_config = model.module.config
+        else:
+            model_config = model.config
 
         prediction_logits = model_output['prediction_logits'].to("cpu")
         seq_relationship_logits = model_output['seq_relationship_logits'].to("cpu")
