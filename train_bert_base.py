@@ -124,8 +124,9 @@ print("-----------------------------------训练模式为%s---------------------
 
 if torch.cuda.device_count() > 1:
     device_ids = list(range(torch.cuda.device_count()))
+    print('111111111111111111111111111111111')
     model = nn.DataParallel(model,device_ids=device_ids)
-
+print('22222222222222222222222222222222222')
 model.to(device)
 
 viz = Visdom(env=u'bert_base_special_train')  # 可视化
