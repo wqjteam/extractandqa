@@ -9,5 +9,5 @@ import numpy as np
 
 
 qa_json = pd.read_json("data/origin/intercontest/passage_qa_keyword.json", orient='records', lines=True)
-ner_json = qa_json.loc[:, ["sentence","keyword"]]
-ner_json.to_csv('data/origin/intercontest/passage_ner.txt',header=0)
+ner_json = qa_json.loc[:, ["sentence"]]
+ner_json.to_csv('data/origin/intercontest/passage_ner.txt',index=False,header=0)
