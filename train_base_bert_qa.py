@@ -302,23 +302,22 @@ for epoch in range(epoch_size):  # 所有数据迭代总的次数
         else:
             model_config = model.config
         loss=model_output.loss
-        loss.backward()  # 反向传播
-        qa_start_logits = model_output.start_logits.to("cpu")
-        qa_end_logits = model_output.end_logits.to("cpu")
-        epoch_total_loss+=torch.mean(loss.to("cpu"))
-
-
         # 进行统计展示
         epoch_step += 1
+        qa_start_logits = model_output.start_logits.to("cpu")
+        qa_end_logits = model_output.end_logits.to("cpu")
+        epoch_total_loss+=loss.to("cpu")
 
 
 
+        optim.zero_grad()  # 每次计算万的时候需要把上次计算的梯度设置为0
 
 
+        print('第%d个epoch的%d批数据的loss：%f' % (epoch + 1, step + 1, torch.mean(loss).detach().to("cpu")))
+        loss.backward()  # 反向传播
 
         optim.step()  # 用来更新参数，也就是的w和b的参数更新操作
-        print('第%d个epoch的%d批数据的loss：%f' % (epoch + 1, step + 1, torch.mean(loss).detach().to("cpu")))
-        optim.zero_grad()  # 每次计算万的时候需要把上次计算的梯度设置为0
+
     # numpy不可以直接在有梯度的数据上获取，需要先去除梯度
     # 绘制epoch以及对应的测试集损失loss 第一个参数是y  第二个是x
     viz.line(Y=[epoch_total_loss / epoch_step],X=[ epoch + 1], win="pitcure_1", update='append')
