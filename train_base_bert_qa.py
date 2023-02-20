@@ -63,26 +63,12 @@ passage_keyword_json = passage_keyword_json[passage_keyword_json['q_a'].apply(la
 passage_keyword_json = passage_keyword_json.explode("q_a").values
 
 
-
-sent = ['我爱北京天安门，天安门上太阳升', '我爱北京中南海，毛主席在中南还', '改革开放好，我哎深圳，深圳是改革开放先驱']
-question = ['我爱什么?', '毛主席在哪?', '谁是改革开放先驱']
-
 train_data, dev_data = Data.random_split(passage_keyword_json, [int(len(passage_keyword_json) * 0.9),
                                                                 len(passage_keyword_json) - int(
                                                                  len(passage_keyword_json) * 0.9)])
 
 
 
-# 创建一个实例，参数是tokenizer，如果不是batch的化，就采用tokenizer.encode_plus
-encoded_dict = tokenizer.batch_encode_plus(
-    batch_text_or_text_pairs=list(zip(sent, question)),
-    # 输入文本,采用list[tuple(question,text)]的方式进行输入 zip 把两个list压成tuple的list对
-    add_special_tokens=True,  # 添加 '[CLS]' 和 '[SEP]'
-    max_length=128,  # 填充 & 截断长度
-    truncation=True,
-    padding='longest',
-    return_attention_mask=True,  # 返回 attn. masks.
-)
 
 # print(encoded_dict)
 
