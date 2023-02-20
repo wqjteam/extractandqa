@@ -44,7 +44,7 @@ keyword_flag = False
 
 
 model = AutoModelForQuestionAnswering.from_pretrained(model_name)  # num_labels 测试用一下，看看参数是否传递
-
+optim = Adam(model.parameters(), lr=5e-5)  # 需要填写模型的参数
 
 
 
@@ -201,7 +201,7 @@ dev_dataloader = Data.DataLoader(
 
 
 # 看是否用cpu或者gpu训练
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 print("-----------------------------------训练模式为%s------------------------------------" % device)
 
 if torch.cuda.device_count() > 1:
@@ -211,7 +211,7 @@ if torch.cuda.device_count() > 1:
 
 model.to(device)
 # 用于梯度回归
-optim = Adam(model.parameters(), lr=5e-5)  # 需要填写模型的参数,在多gpu上必须放在模型后面
+
 model_name='base_bert_model'
 '''
 可视化
