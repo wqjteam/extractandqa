@@ -304,7 +304,7 @@ for epoch in range(epoch_size):  # 所有数据迭代总的次数
         loss=model_output.loss
         qa_start_logits = model_output.start_logits.to("cpu")
         qa_end_logits = model_output.end_logits.to("cpu")
-        epoch_total_loss+=loss.to("cpu")
+        epoch_total_loss+=torch.mean(loss.to("cpu"))
 
 
         # 进行统计展示
@@ -312,8 +312,8 @@ for epoch in range(epoch_size):  # 所有数据迭代总的次数
 
 
         optim.zero_grad()  # 每次计算的时候需要把上次计算的梯度设置为0
-        print(loss)
-        print('第%d个epoch的%d批数据的loss：%f' % (epoch + 1, step + 1, loss.detach().to("cpu")))
+
+        print('第%d个epoch的%d批数据的loss：%f' % (epoch + 1, step + 1, torch.mean(loss).detach().to("cpu")))
         loss.backward()  # 反向传播
 
         optim.step()  # 用来更新参数，也就是的w和b的参数更新操作
