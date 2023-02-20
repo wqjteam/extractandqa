@@ -313,7 +313,7 @@ for epoch in range(epoch_size):  # 所有数据迭代总的次数
 
         optim.zero_grad()  # 每次计算的时候需要把上次计算的梯度设置为0
 
-        print('第%d个epoch的%d批数据的loss：%f' % (epoch + 1, step + 1, loss))
+        print('第%d个epoch的%d批数据的loss：%f' % (epoch + 1, step + 1, loss.detach().to("cpu")))
         loss.backward()  # 反向传播
 
         optim.step()  # 用来更新参数，也就是的w和b的参数更新操作
