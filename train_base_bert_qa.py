@@ -47,8 +47,7 @@ model = AutoModelForQuestionAnswering.from_pretrained(model_name)  # num_labels 
 
 
 
-# 用于梯度回归
-optim = Adam(model.parameters(), lr=5e-5)  # 需要填写模型的参数
+
 '''
 获取数据
 '''
@@ -211,7 +210,8 @@ if torch.cuda.device_count() > 1:
     model = nn.DataParallel(model,device_ids=device_ids)
 
 model.to(device)
-
+# 用于梯度回归
+optim = Adam(model.parameters(), lr=5e-5)  # 需要填写模型的参数,在多gpu上必须放在模型后面
 model_name='base_bert_model'
 '''
 可视化
