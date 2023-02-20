@@ -302,7 +302,8 @@ for epoch in range(epoch_size):  # 所有数据迭代总的次数
         else:
             model_config = model.config
         loss=model_output.loss
-        loss.backward()  # 反向传播
+
+        loss.detach().to("cpu").backward()  # 反向传播
         # 进行统计展示
         epoch_step += 1
         qa_start_logits = model_output.start_logits.to("cpu")
