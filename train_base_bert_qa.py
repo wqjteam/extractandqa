@@ -265,13 +265,13 @@ def evaluate(model, eval_data_loader, epoch, tokenizer):
         f1_score = qa_metric['F1']
 
         print('--eval---epoch次数:%d---em得分: %.6f - f1得分: %.6f---total损失函数: %.6f'
-              %(epoch ,em_score, f1_score, loss.detach()))
+              %(epoch ,em_score, f1_score, torch.mean(loss).detach().to("cpu")))
         # 损失函数的平均值
         # 按照概率最大原则，计算单字的标签编号
         # argmax计算logits中最大元素值的索引，从0开始
         # 进行统计展示
         eval_step += 1
-        eval_total_loss += loss.detach()
+        eval_total_loss += torch.mean(loss).detach()
         eval_em_score += em_score
         eval_f1_score += f1_score
 
