@@ -216,7 +216,7 @@ model_name='base_bert_model'
 '''
 可视化
 '''
-viz = Visdom(env=u'qa_%s_train'%model_name)
+viz = Visdom(env=u'qa_base_bert_model_notnsp')
 name = [ 'total_loss']
 name_em_f1 = ['em_score', 'f1_score']
 viz.line(Y=[ 0.], X=[ 0.], win="pitcure_1",
