@@ -212,7 +212,7 @@ if torch.cuda.device_count() > 1:
 model.to(device)
 # 用于梯度回归
 
-model_name='base_bert_model'
+
 '''
 可视化
 '''
@@ -303,7 +303,7 @@ for epoch in range(epoch_size):  # 所有数据迭代总的次数
             model_config = model.config
         loss=model_output.loss
 
-        loss.backward()  # 反向传播
+        loss.backward(torch.ones_like(loss))  # 反向传播,多个gpu因为是个向量 所以需要
         # 进行统计展示
         epoch_step += 1
         qa_start_logits = model_output.start_logits.to("cpu")
