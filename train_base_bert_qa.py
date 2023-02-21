@@ -271,7 +271,7 @@ def evaluate(model, eval_data_loader, epoch, tokenizer):
         # argmax计算logits中最大元素值的索引，从0开始
         # 进行统计展示
         eval_step += 1
-        eval_total_loss += torch.mean(loss).detach()
+        eval_total_loss += torch.mean(loss).detach().to("cpu")
         eval_em_score += em_score
         eval_f1_score += f1_score
 
@@ -303,18 +303,18 @@ for epoch in range(epoch_size):  # 所有数据迭代总的次数
             model_config = model.config
         loss=model_output.loss
 
-        loss.backward(torch.ones_like(loss))  # 反向传播,多个gpu因为是个向量 所以需要
+
         # 进行统计展示
         epoch_step += 1
         qa_start_logits = model_output.start_logits.to("cpu")
         qa_end_logits = model_output.end_logits.to("cpu")
-        epoch_total_loss+=loss.to("cpu")
+        epoch_total_loss+=torch.mean(loss).to("cpu")
 
 
 
         optim.zero_grad()  # 每次计算万的时候需要把上次计算的梯度设置为0
 
-
+        loss.backward(torch.ones_like(loss))  # 反向传播,多个gpu因为是个向量 所以需要
         print('第%d个epoch的%d批数据的loss：%f' % (epoch + 1, step + 1, torch.mean(loss).detach().to("cpu")))
 
 
