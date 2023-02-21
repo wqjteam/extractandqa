@@ -308,7 +308,7 @@ for epoch in range(epoch_size):  # 所有数据迭代总的次数
         epoch_step += 1
         qa_start_logits = model_output.start_logits.to("cpu")
         qa_end_logits = model_output.end_logits.to("cpu")
-        epoch_total_loss+=torch.mean(loss).to("cpu")
+        epoch_total_loss+=torch.mean(loss).detach().to("cpu")
 
 
 
