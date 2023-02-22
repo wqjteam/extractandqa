@@ -14,12 +14,13 @@ from transformers import AutoTokenizer, AutoModelForPreTraining
 from visdom import Visdom
 
 from PraticeOfTransformers import Utils
+from PraticeOfTransformers.CustomModelForBertWithoutNsp import CustomModelForBaseBertWithoutNsp
 from PraticeOfTransformers.DataCollatorForWholeWordMaskOriginal import DataCollatorForWholeWordMaskOriginal
 from PraticeOfTransformers.DataCollatorForWholeWordMaskSpecial import DataCollatorForWholeWordMaskSpecial
 
 model_name = 'bert-base-chinese'
 tokenizer = AutoTokenizer.from_pretrained(model_name)
-model = AutoModelForPreTraining.from_pretrained(model_name, num_labels=2)  # num_labels 测试用一下，看看参数是否传递
+model = CustomModelForBaseBertWithoutNsp.from_pretrained(model_name, num_labels=2)  # num_labels 测试用一下，看看参数是否传递
 
 batch_size = 2
 epoch_size = 1000
@@ -76,7 +77,7 @@ def create_batch(data, tokenizer, data_collator, keyword_flag=False):
     '''
 
     encoded_dict_textandquestion = tokenizer.batch_encode_plus(
-        batch_text_or_text_pairs=list(zip(text, questions)),  # 输入文本对 # 输入文本,采用list[tuple(text,question)]的方式进行输入
+        batch_text_or_text_pairs=list(text),  # 不采用文本对，直接使用句子去训练
         add_special_tokens=True,  # 添加 '[CLS]' 和 '[SEP]'
         max_length=512,  # 填充 & 截断长度
         truncation=True,
@@ -94,14 +95,15 @@ def create_batch(data, tokenizer, data_collator, keyword_flag=False):
     base_input_ids = [torch.tensor(input_id) for input_id in encoded_dict_textandquestion['input_ids']]
     attention_masks = [torch.tensor(attention) for attention in encoded_dict_textandquestion['attention_mask']]
     data_collator_output = data_collator(zip(base_input_ids, encoded_dict_keywords['input_ids']))
+    #由于不训练nsp了所以这里token_type_ids全部给0
+    zero_token_type_ids=torch.zeros_like(torch.tensor(encoded_dict_textandquestion['token_type_ids']))
     mask_input_ids = data_collator_output["input_ids"]
 
     mask_input_labels = data_collator_output["labels"]  # 需要获取不是-100的位置，证明其未被替换，这也是target -100的位置在计算crossentropyloss 会丢弃
 
     # 对于model只接受tensor[list] 必须把 list[tensor] 转为tensor[list]
     return mask_input_ids, torch.stack(
-        attention_masks), torch.tensor(
-        encoded_dict_textandquestion['token_type_ids']), mask_input_labels, torch.tensor(nsp_labels),
+        attention_masks), zero_token_type_ids, mask_input_labels, torch.tensor(nsp_labels),
 
 
 # 把一些参数固定
