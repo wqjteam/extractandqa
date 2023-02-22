@@ -44,38 +44,32 @@ if len(sys.argv) >= 4 and sys.argv[3] == 'origin':
 '''
 获取数据
 '''
-passage_keyword_json = pd.read_json("./data/origin/intercontest/passage_qa_keyword_union_negate.json", orient='records',
-                                    lines=True).drop("spos", axis=1)
+passage_keyword_json = pd.read_json("./data/origin/intercontest/passage_qa_keyword.json", orient='records',
+                                    lines=True)
 
-passage_keyword_json = passage_keyword_json[passage_keyword_json['q_a'].apply(lambda x: len(x) >= 1)]
+passage_keyword_json_sk = passage_keyword_json.loc[:,['sentence','keyword']].values
 
-passage_keyword_json = passage_keyword_json.explode("q_a").values
 
-train_data, dev_data = Data.random_split(passage_keyword_json, [int(len(passage_keyword_json) * 0.9),
-                                                                len(passage_keyword_json) - int(
-                                                                    len(passage_keyword_json) * 0.9)])
 
-nsp_id_label = {1: True, 0: False}
+train_data, dev_data = Data.random_split(passage_keyword_json_sk, [int(len(passage_keyword_json_sk) * 0.9),
+                                                                len(passage_keyword_json_sk) - int(
+                                                                    len(passage_keyword_json_sk) * 0.9)])
 
-nsp_label_id = {True: 1, False: 0}
+
 
 
 def create_batch(data, tokenizer, data_collator, keyword_flag=False):
-    text, question_answer, keyword, nsp = zip(*data)  # arrat的四列 转为tuple
+    text,  keyword = zip(*data)  # arrat的四列 转为tuple
     text = list(text)  # tuple 转为 list0
-    questions = [q_a.get('question') for q_a in question_answer]
+    # questions = [q_a.get('question') for q_a in question_answer]
 
-    nsps = list(nsp)  # tuple 转为list
-
-    keywords = [kw[0] for kw in keyword]  # tuple 转为list 变成了双重的list 还是遍历转
-    nsp_labels = nsps  # 用作判断两句是否相关
 
     '''
     bert是双向的encode 所以qestion和text放在前面和后面区别不大
     '''
 
     encoded_dict_textandquestion = tokenizer.batch_encode_plus(
-        batch_text_or_text_pairs=list(text),  # 不采用文本对，直接使用句子去训练
+        batch_text_or_text_pairs=text,  # 不采用文本对，直接使用句子去训练
         add_special_tokens=True,  # 添加 '[CLS]' 和 '[SEP]'
         max_length=512,  # 填充 & 截断长度
         truncation=True,
@@ -83,11 +77,15 @@ def create_batch(data, tokenizer, data_collator, keyword_flag=False):
         return_attention_mask=True,  # 返回 attn. masks.
     )
 
-    encoded_dict_keywords = tokenizer.batch_encode_plus(batch_text_or_text_pairs=keywords,
+    encoded_dict_keywords = []
+
+    for ks in keyword:
+        encoded_dict_keyword=tokenizer.batch_encode_plus(batch_text_or_text_pairs=ks,
                                                         add_special_tokens=False,  # 添加 '[CLS]' 和 '[SEP]'
                                                         pad_to_max_length=False,
                                                         return_attention_mask=False
                                                         )
+        encoded_dict_keywords.append(encoded_dict_keyword['input_ids'])
 
     # 传入的参数是tensor形式的input_ids，返回input_ids和label，label中-100的位置的词没有被mask
     base_input_ids = [torch.tensor(input_id) for input_id in encoded_dict_textandquestion['input_ids']]
@@ -101,7 +99,7 @@ def create_batch(data, tokenizer, data_collator, keyword_flag=False):
 
     # 对于model只接受tensor[list] 必须把 list[tensor] 转为tensor[list]
     return mask_input_ids, torch.stack(
-        attention_masks), zero_token_type_ids, mask_input_labels, torch.tensor(nsp_labels),
+        attention_masks), zero_token_type_ids, mask_input_labels, torch.tensor([]),
 
 
 # 把一些参数固定
