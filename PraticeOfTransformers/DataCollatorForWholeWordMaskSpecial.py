@@ -58,12 +58,13 @@ class DataCollatorForWholeWordMaskSpecial(DataCollatorForLanguageModelingSpecial
         mask_labels = []
         for e,k in zip(examples,kyewords):
             ref_tokens = []
-            kw_tokens = []
+            kw_tokens = [] #是个二维数组，每一条句子中 会有多个keyword
             for id in tolist(e["input_ids"]):
+                # token = self.tokenizer.convert_ids_to_tokens(id)
                 token = self.tokenizer._convert_id_to_token(id)
                 ref_tokens.append(token)
             for k_id in k:
-                k_token = self.tokenizer._convert_id_to_token(k_id)
+                k_token = self.tokenizer.convert_ids_to_tokens(k_id)
                 kw_tokens.append(k_token)
 
             # For Chinese tokens, we need extra inf to mark sub-word, e.g [喜,欢]-> [喜，##欢]
@@ -240,14 +241,17 @@ class DataCollatorForWholeWordMaskSpecial(DataCollatorForLanguageModelingSpecial
 
     def get_index_in_array(self,be_search_array,target_array):
             a = be_search_array
-            b = target_array
-            index = 0
+            bs = target_array
+
             find_all_index = []
-            while (index < len(a)):
-                #当两个数组形式对比的时候，有一个为ndraay 需要用到.all() 如果是两个纯array则不需要
-                if a[index] == b[0] and (index + len(b)) <= len(a) and (a[index:index + len(b)] == b[:]):
-                    find_all_index.append((index, index + len(b)))
-                    index += len(b)
-                else:
-                    index += 1
+            #应对多个keyword，也就是多个关键词
+            for b in bs:
+                index = 0
+                while (index < len(a)):
+                    #当两个数组形式对比的时候，有一个为ndraay 需要用到.all() 如果是两个纯array则不需要
+                    if a[index] == b[0] and (index + len(b)) <= len(a) and (a[index:index + len(b)] == b[:]):
+                        find_all_index.append((index, index + len(b)))
+                        index += len(b)
+                    else:
+                        index += 1
             return find_all_index

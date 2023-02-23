@@ -79,18 +79,22 @@ def create_batch(data, tokenizer, data_collator, keyword_flag=False):
 
     encoded_dict_keywords = []
 
-    for ks in keyword:
-        encoded_dict_keyword=tokenizer.batch_encode_plus(batch_text_or_text_pairs=ks,
-                                                        add_special_tokens=False,  # 添加 '[CLS]' 和 '[SEP]'
-                                                        pad_to_max_length=False,
-                                                        return_attention_mask=False
-                                                        )
-        encoded_dict_keywords.append(encoded_dict_keyword['input_ids'])
+    for index,ks in enumerate(keyword):
+        if len(ks)==0:
+            print('没有keyword的句子:%s'%text[index])
+            encoded_dict_keywords.append([])
+        else:
+            encoded_dict_keyword=tokenizer.batch_encode_plus(batch_text_or_text_pairs=ks,
+                                                            add_special_tokens=False,  # 添加 '[CLS]' 和 '[SEP]'
+                                                            pad_to_max_length=False,
+                                                            return_attention_mask=False
+                                                            )
+            encoded_dict_keywords.append(encoded_dict_keyword['input_ids'])
 
     # 传入的参数是tensor形式的input_ids，返回input_ids和label，label中-100的位置的词没有被mask
     base_input_ids = [torch.tensor(input_id) for input_id in encoded_dict_textandquestion['input_ids']]
     attention_masks = [torch.tensor(attention) for attention in encoded_dict_textandquestion['attention_mask']]
-    data_collator_output = data_collator(zip(base_input_ids, encoded_dict_keywords['input_ids']))
+    data_collator_output = data_collator(zip(base_input_ids, encoded_dict_keywords))
     # 由于不训练nsp了所以这里token_type_ids全部给0
     zero_token_type_ids = torch.zeros_like(torch.tensor(encoded_dict_textandquestion['token_type_ids']))
     mask_input_ids = data_collator_output["input_ids"]
