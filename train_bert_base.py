@@ -49,9 +49,9 @@ passage_keyword_json = pd.read_json("./data/origin/intercontest/passage_qa_keywo
 
 passage_keyword_json_sk = passage_keyword_json.loc[:,['sentence','keyword']].values
 
+train_data=passage_keyword_json_sk
 
-
-train_data, dev_data = Data.random_split(passage_keyword_json_sk, [int(len(passage_keyword_json_sk) * 0.9),
+_, dev_data = Data.random_split(passage_keyword_json_sk, [int(len(passage_keyword_json_sk) * 0.9),
                                                                 len(passage_keyword_json_sk) - int(
                                                                     len(passage_keyword_json_sk) * 0.9)])
 
