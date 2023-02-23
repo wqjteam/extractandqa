@@ -19,10 +19,10 @@ ner_json_withoutkeyword.to_csv('data/origin/intercontest/passage_nerwithoutkeywo
 
 qa_json = pd.read_json("data/origin/国家级非物质文化遗产代表性项目名录.json", orient='records', lines=True)
 ner_json = qa_json.loc[:, ["content"]]
-ner_json.to_csv('data/origin/intercontest/feiyi_passage_ner.txt',index=False,header=0)
+ner_json.to_csv('data/origin/intercontest/feiyi_passage_ner_withoutkeyword.txt',index=False,header=0)
 
 qa_withoutkeyword = qa_json.loc[:, ["content"]]
 qa_withoutkeyword.to_csv('data/origin/intercontest/feiyi_passage_qa_withoutkeyword.txt',index=False,header=0)
 
 qa_withkeyword = qa_json.loc[:, ["content"],['name']]
-qa_withkeyword.to_csv('data/origin/intercontest/feiyi_passage_qa_withkeyword.txt',index=False,header=0)
+qa_withkeyword.to_csv('data/origin/intercontest/feiyi_passage_withkeyword.txt',index=False,header=0)
