@@ -20,10 +20,17 @@ import numpy as np
 fyi_json = pd.read_json("data/origin/国家级非物质文化遗产代表性项目名录.json", orient='records', lines=True)
 fyi_json = fyi_json.loc[:, ['name','gb_time','province',"content"]]
 
-fyi_json.to_csv('data/origin/intercontest/feiyi_passage_ner_withoutkeyword.txt',index=False,header=0)
+def passageunion(inputdata):
+    return inputdata['name']+':'+ inputdata['gb_time']+':'+ inputdata['content']
+
+fyi_json=fyi_json.apply(passageunion, axis=1)
 
 
-fyi_json.to_csv('data/origin/intercontest/feiyi_passage_qa_withoutkeyword.txt',index=False,header=0)
 
-qa_withkeyword = fyi_json.loc[:, ["content"],['name']]
-qa_withkeyword.to_csv('data/origin/intercontest/feiyi_passage_withkeyword.txt',index=False,header=0)
+fyi_json.to_csv('data/origin/intercontest/feiyi_passage_ner_withkeyword.txt',index=False,header=0)
+
+
+fyi_json.to_csv('data/origin/intercontest/feiyi_passage_qa_withkeyword.txt',index=False,header=0)
+
+# qa_withkeyword = fyi_json.loc[:, ["content"],['name']]
+# qa_withkeyword.to_csv('data/origin/intercontest/feiyi_passage_withkeyword.txt',index=False,header=0)
