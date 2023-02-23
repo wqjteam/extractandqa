@@ -16,7 +16,8 @@ from pytorchcrf import CRF
 # 为您的配置定义一个 model_type (这里是 model_type = “ resnet”)并不是强制性的，除非您想用 auto classes 注册您的模型(参见上一节)。
 #
 # 完成这些之后，您就可以轻松地创建和保存您的配置，就像使用库中的任何其他模型配置一样。下面是我们如何创建一个 resnet50d 配置文件并保存它:
-from transformers.models.bert.modeling_bert import BertOnlyMLMHead, BertForPreTrainingOutput, BertPreTrainingHeads
+from transformers.models.bert.modeling_bert import BertOnlyMLMHead, BertForPreTrainingOutput, BertPreTrainingHeads, \
+    BertLMPredictionHead
 from transformers.utils import ModelOutput
 
 
@@ -34,16 +35,16 @@ class CustomModelForBaseBertWithoutNsp(BertPreTrainedModel):
         super().__init__(config)
 
         self.bert = BertModel(config)
-        self.cls = BertPreTrainingHeads(config)
-
+        # self.cls = BertPreTrainingHeads(config)
+        self.cls = BertLMPredictionHead(config)
         # Initialize weights and apply final processing
         self.post_init()
 
-    def get_output_embeddings(self):
-        return self.cls.predictions.decoder
-
-    def set_output_embeddings(self, new_embeddings):
-        self.cls.predictions.decoder = new_embeddings
+    # def get_output_embeddings(self):
+    #     return self.cls.predictions.decoder
+    #
+    # def set_output_embeddings(self, new_embeddings):
+    #     self.cls.predictions.decoder = new_embeddings
 
     def forward(
             self,
@@ -76,7 +77,7 @@ class CustomModelForBaseBertWithoutNsp(BertPreTrainedModel):
 
         sequence_output, pooled_output = outputs[:2]
         # seq_relationship_score 直接丢弃 loss不计算 这里的bert只给实体识别使用
-        prediction_scores, seq_relationship_score = self.cls(sequence_output, pooled_output)
+        prediction_scores = self.cls(sequence_output)
 
         total_loss = None
         if labels is not None and next_sentence_label is not None:
