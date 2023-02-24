@@ -6,9 +6,10 @@ import random
 import pandas
 import pandas as pd
 import numpy as np
-import pymysql
+
 from sqlalchemy import create_engine
-# from pandas import Dataframe as df
+from sqlalchemy.dialects.mysql import pymysql
+from pandas import Dataframe as df
 import jieba
 
 qa_json = pd.read_json("data/origin/intercontest/question_train.json", orient='records', lines=True)
