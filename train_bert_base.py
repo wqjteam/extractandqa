@@ -3,6 +3,7 @@ import os
 import sys
 from functools import partial
 
+import numpy as np
 import pandas as pd
 import torch
 import torch.utils.data as Data
@@ -44,25 +45,37 @@ if len(sys.argv) >= 4 and sys.argv[3] == 'origin':
 '''
 获取数据
 '''
-passage_keyword_json = pd.read_json("./data/origin/intercontest/passage_qa_keyword.json", orient='records',
-                                    lines=True)
+# 获取遗址相关
+passage_keyword_json_realrelic = pd.read_json("./data/origin/intercontest/passage_qa_keyword.json", orient='records',
+                                              lines=True)
 
-passage_keyword_json_sk = passage_keyword_json.loc[:,['sentence','keyword']].values
+# 获取非遗址相关
+passage_keyword_json_virtualrelic_file = open("./data/origin/intercontest/feiyi_passage_ner_withkeyword.txt",
+                                              encoding="utf-8")
+virtualrelic_setence = []
+virtualrelic_keyword = []
+for row in passage_keyword_json_virtualrelic_file.readlines():
+    tmp_list = row.split(':')  # 按‘:'切分每行的数据
+    virtualrelic_setence.append(row)
+    virtualrelic_keyword.append([tmp_list[0]])
+virtualrelic_setence_keyword = np.concatenate(
+    (np.array(virtualrelic_setence).reshape(-1, 1), np.array(virtualrelic_keyword,dtype=list).reshape(-1, 1)), axis=1)
+passage_keyword_json_virtualrelic = pd.DataFrame(data=virtualrelic_setence_keyword, columns=['sentence', 'keyword'])
 
-train_data=passage_keyword_json_sk
+union_pd = pd.concat(
+    [passage_keyword_json_realrelic.loc[:, ['sentence', 'keyword']], passage_keyword_json_virtualrelic], axis=0)
+train_data = union_pd.values
 
-_, dev_data = Data.random_split(passage_keyword_json_sk, [int(len(passage_keyword_json_sk) * 0.9),
-                                                                len(passage_keyword_json_sk) - int(
-                                                                    len(passage_keyword_json_sk) * 0.9)])
-
-
+_, dev_data = Data.random_split(union_pd.values, [int(len(union_pd.values) * 0.9),
+                                             len(union_pd.values) - int(
+                                                 len(union_pd.values) * 0.9)])
 
 
 def create_batch(data, tokenizer, data_collator, keyword_flag=False):
-    text,  keyword = zip(*data)  # arrat的四列 转为tuple
+    text, keyword = zip(*data)  # arrat的四列 转为tuple
     text = list(text)  # tuple 转为 list0
+    keyword=[kw if isinstance(kw,list) else [kw] for kw in keyword]
     # questions = [q_a.get('question') for q_a in question_answer]
-
 
     '''
     bert是双向的encode 所以qestion和text放在前面和后面区别不大
@@ -79,16 +92,16 @@ def create_batch(data, tokenizer, data_collator, keyword_flag=False):
 
     encoded_dict_keywords = []
 
-    for index,ks in enumerate(keyword):
-        if len(ks)==0:
-            print('没有keyword的句子:%s'%text[index])
+    for index, ks in enumerate(keyword):
+        if len(ks) == 0:
+            # print('没有keyword的句子:%s' % text[index])
             encoded_dict_keywords.append([])
         else:
-            encoded_dict_keyword=tokenizer.batch_encode_plus(batch_text_or_text_pairs=ks,
-                                                            add_special_tokens=False,  # 添加 '[CLS]' 和 '[SEP]'
-                                                            pad_to_max_length=False,
-                                                            return_attention_mask=False
-                                                            )
+            encoded_dict_keyword = tokenizer.batch_encode_plus(batch_text_or_text_pairs=ks,
+                                                               add_special_tokens=False,  # 添加 '[CLS]' 和 '[SEP]'
+                                                               pad_to_max_length=False,
+                                                               return_attention_mask=False
+                                                               )
             encoded_dict_keywords.append(encoded_dict_keyword['input_ids'])
 
     # 传入的参数是tensor形式的input_ids，返回input_ids和label，label中-100的位置的词没有被mask
@@ -191,7 +204,7 @@ def evaluate(model, eval_data_loader, epoch):
         # eval_nsp_loss += next_sentence_loss.detach()
         eval_total_loss += total_loss.detach()
         print('--eval---eopch: %d----mlm_loss: %f------ 损失函数: %.6f' % (
-        epoch, masked_lm_loss, total_loss))
+            epoch, masked_lm_loss, total_loss))
 
     viz.line(Y=[
         (eval_mlm_loss / eval_step, eval_total_loss / eval_step)], X=[(epoch + 1, epoch + 1)], win="pitcure_2",
