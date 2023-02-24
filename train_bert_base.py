@@ -272,7 +272,7 @@ for epoch in range(epoch_size):  # 所有数据迭代总的次数
 
     # 每5个epoch保存一次
     if (epoch + 1) % 5 == 0:
-        torch.save(model.state_dict(), 'save_model/bert_base/bert_base_epoch_%d' % (epoch + 1))
+        torch.save(model.state_dict(), 'save_model/bert_base_unionvitrual/bert_base_unionvitrual_epoch_%d' % (epoch + 1))
 
 # 最后保存一下
-torch.save(model.state_dict(), 'save_model/bert_base/bert_base_epoch_%d' % (epoch_size))
+torch.save(model.state_dict(), 'save_model/bert_base_unionvitrual/bert_base_unionvitrual_epoch_%d' % (epoch_size))
