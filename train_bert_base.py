@@ -19,6 +19,7 @@ from PraticeOfTransformers.CustomModelForBertWithoutNsp import CustomModelForBas
 from PraticeOfTransformers.DataCollatorForWholeWordMaskOriginal import DataCollatorForWholeWordMaskOriginal
 from PraticeOfTransformers.DataCollatorForWholeWordMaskSpecial import DataCollatorForWholeWordMaskSpecial
 
+os.environ['CUDA_VISIBLE_DEVICES'] = '0,1'  # 指定GPU编号 多gpu训练
 model_name = 'bert-base-chinese'
 tokenizer = AutoTokenizer.from_pretrained(model_name)
 model = CustomModelForBaseBertWithoutNsp.from_pretrained(model_name, num_labels=2)  # num_labels 测试用一下，看看参数是否传递
@@ -59,7 +60,7 @@ for row in passage_keyword_json_virtualrelic_file.readlines():
     virtualrelic_setence.append(row)
     virtualrelic_keyword.append([tmp_list[0]])
 virtualrelic_setence_keyword = np.concatenate(
-    (np.array(virtualrelic_setence).reshape(-1, 1), np.array(virtualrelic_keyword,dtype=list).reshape(-1, 1)), axis=1)
+    (np.array(virtualrelic_setence).reshape(-1, 1), np.array(virtualrelic_keyword, dtype=list).reshape(-1, 1)), axis=1)
 passage_keyword_json_virtualrelic = pd.DataFrame(data=virtualrelic_setence_keyword, columns=['sentence', 'keyword'])
 
 union_pd = pd.concat(
@@ -67,14 +68,14 @@ union_pd = pd.concat(
 train_data = union_pd.values
 
 _, dev_data = Data.random_split(union_pd.values, [int(len(union_pd.values) * 0.9),
-                                             len(union_pd.values) - int(
-                                                 len(union_pd.values) * 0.9)])
+                                                  len(union_pd.values) - int(
+                                                      len(union_pd.values) * 0.9)])
 
 
 def create_batch(data, tokenizer, data_collator, keyword_flag=False):
     text, keyword = zip(*data)  # arrat的四列 转为tuple
     text = list(text)  # tuple 转为 list0
-    keyword=[kw if isinstance(kw,list) else [kw] for kw in keyword]
+    keyword = [kw if isinstance(kw, list) else [kw] for kw in keyword]
     # questions = [q_a.get('question') for q_a in question_answer]
 
     '''
@@ -272,7 +273,8 @@ for epoch in range(epoch_size):  # 所有数据迭代总的次数
 
     # 每5个epoch保存一次
     if (epoch + 1) % 5 == 0:
-        torch.save(model.state_dict(), 'save_model/bert_base_unionvitrual/bert_base_unionvitrual_epoch_%d' % (epoch + 1))
+        torch.save(model.state_dict(),
+                   'save_model/bert_base_unionvitrual/bert_base_unionvitrual_epoch_%d' % (epoch + 1))
 
 # 最后保存一下
 torch.save(model.state_dict(), 'save_model/bert_base_unionvitrual/bert_base_unionvitrual_epoch_%d' % (epoch_size))
