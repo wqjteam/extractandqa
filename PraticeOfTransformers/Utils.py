@@ -207,12 +207,10 @@ def convert_ner_data(file_path):
                 end = label_item['end']
                 label = label_item['labels'][0]
 
-                if end-start==1:
-                    label_list[start] = f'S-{label}'                 # 属于单个单词构成的实体
-                else:
-                    label_list[start] = f'B-{label}'
-                    label_list[start+1:end-1] = [f'I-{label}' for i in range(end-start-2)]
-                    label_list[end - 1] = f'E-{label}'
+
+                label_list[start] = f'B-{label}'
+                label_list[start+1:end] = [f'I-{label}' for i in range(end-start-1)]
+
         assert len(label_list) == len(text_list)
         text_label_tuple.append((text_list,label_list))
 

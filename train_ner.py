@@ -32,10 +32,8 @@ if len(sys.argv) >= 3:
 if len(sys.argv) >= 4:
     model_name = sys.argv[3]
 
-ner_id_label = {0: 'O', 1: 'B-ORG', 2: 'M-ORG', 3: 'E-ORG', 4: 'B-LOC', 5: 'M-LOC', 6: 'E-LOC', 7: 'B-PER',
-                8: 'M-PER', 9: 'E-PER', 10: 'B-TIME', 11: 'M-TIME', 12: 'E-TIME', 13: 'B-BOOK', 14: 'M-BOOK',
-                15: 'E-BOOK', 16: 'I-ORG', 17: 'I-LOC', 18: 'I-PER', 19: 'I-TIME', 20: 'I-BOOK', 21: 'S-ORG',
-                22: 'S-LOC', 23: 'S-PER', 24: 'S-TIME', 24: 'S-BOOK'}
+ner_id_label = {0: 'O', 1: 'B-ORG', 2: 'B-PER', 3: 'B-LOC', 4: 'B-TIME', 5: 'B-BOOK',
+                        6: 'I-ORG', 7: 'I-PER', 8: 'I-LOC', 9: 'I-TIME', 10: 'I-BOOK'}
 ner_label_id = {}
 for key in ner_id_label:
     ner_label_id[ner_id_label[key]] = key
