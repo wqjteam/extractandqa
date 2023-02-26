@@ -254,8 +254,8 @@ for epoch in range(epoch_size):  # 所有数据迭代总的次数
         viz.line(Y=[total_loss / total_step], X=[epoch + 1], win="pitcure_1", update='append')
 
         loss.backward()  # 反向传播
+        scheduler.step() #warm_up
         optim.step()  # 用来更新参数，也就是的w和b的参数更新操作
-        scheduler.step()
 
     evaluate(model, dev_dataloader, epoch)
     # 每5个epoch保存一次
