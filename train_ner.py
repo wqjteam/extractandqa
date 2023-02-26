@@ -43,7 +43,7 @@ model = BertForNerAppendBiLstmAndCrf.from_pretrained(pretrained_model_name_or_pa
 # 加载数据集
 nerdataset = Utils.convert_ner_data('data/origin/intercontest/relic_ner_handlewell.json')
 # nerdataset = list(filter(lambda x: ''.join(x[0]).startswith("东汉玉蝉"), nerdataset))
-nerdataset=nerdataset[0:10]
+# nerdataset=nerdataset[0:10]
 train_data, dev_data = Data.random_split(nerdataset, [int(len(nerdataset) * 0.9),
                                                       len(nerdataset) - int(
                                                           len(nerdataset) * 0.9)])
@@ -165,7 +165,7 @@ train_dataloader = Data.DataLoader(
 )
 
 dev_dataloader = Data.DataLoader(
-    train_data, shuffle=True, collate_fn=create_batch_partial, batch_size=batch_size
+    dev_data, shuffle=True, collate_fn=create_batch_partial, batch_size=batch_size
 )
 
 # 实例化相关metrics的计算对象   len(ner_id_label)+1是为了ignore_index用 他不允许为负数值 这里忽略了，所以不影响结果
