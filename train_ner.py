@@ -18,6 +18,11 @@ from datasets import load_dataset
 from PraticeOfTransformers.CustomModelForNer import BertForNerAppendBiLstmAndCrf
 
 model_name = 'bert-base-chinese'
+batch_size = 2
+epoch_size = 500
+learning_rate = 5e-5
+weight_decay = 0.01  # 最终目的是防止过拟合
+full_fine_tuning = True
 tokenizer = AutoTokenizer.from_pretrained(model_name)
 if len(sys.argv) >= 2:
     batch_size = int(sys.argv[1])
@@ -39,17 +44,13 @@ model = BertForNerAppendBiLstmAndCrf.from_pretrained(pretrained_model_name_or_pa
 
 # 加载数据集
 nerdataset = Utils.convert_ner_data('data/origin/intercontest/relic_ner_handlewell.json')
-nerdataset = list(filter(lambda x: ''.join(x[0]).startswith("东汉玉蝉"), nerdataset))
-# passage_keyword_json = nerdataset[nerdataset.nsp.startwith("东汉玉蝉")]
-train_data, dev_data = Data.random_split(nerdataset, [int(len(nerdataset) * 1),
+# nerdataset = list(filter(lambda x: ''.join(x[0]).startswith("东汉玉蝉"), nerdataset))
+passage_keyword_json = nerdataset[nerdataset.nsp.startwith("东汉玉蝉")]
+train_data, dev_data = Data.random_split(nerdataset, [int(len(nerdataset) * 0.9),
                                                       len(nerdataset) - int(
-                                                          len(nerdataset) * 1)])
-train_data
-batch_size = 4
-epoch_size = 10
-learning_rate = 5e-5
-weight_decay = 0.01  # 最终目的是防止过拟合
-full_fine_tuning = True
+                                                          len(nerdataset) * 0.9)])
+
+
 # 用于梯度回归
 if full_fine_tuning:
     # model.named_parameters(): [bert, bilstm, classifier, crf]
