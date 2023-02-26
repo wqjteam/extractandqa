@@ -35,6 +35,13 @@ for key in ner_id_label:
     ner_label_id[ner_id_label[key]] = key
 model = BertForNerAppendBiLstmAndCrf.from_pretrained(pretrained_model_name_or_path=model_name,
                                                      num_labels=len(ner_label_id))  # num_labels 测试用一下，看看参数是否传递
+
+# 加载数据集
+nerdataset = Utils.convert_ner_data('data/origin/intercontest/relic_ner_handlewell.json')
+train_data, dev_data = Data.random_split(nerdataset, [int(len(nerdataset) * 0.9),
+                                                      len(nerdataset) - int(
+                                                          len(nerdataset) * 0.9)])
+
 batch_size = 4
 epoch_size = 10
 learning_rate = 5e-5
@@ -66,8 +73,8 @@ if full_fine_tuning:
 else:
     param_optimizer = list(model.classifier.named_parameters())
     optimizer_grouped_parameters = [{'params': [p for n, p in param_optimizer]}]
-optimizer = AdamW(optimizer_grouped_parameters, lr=learning_rate, correct_bias=False)
-train_steps_per_epoch = len() // batch_size
+optimizer = AdamW(optimizer_grouped_parameters, lr=learning_rate)
+train_steps_per_epoch = len(train_data) // batch_size
 scheduler = get_cosine_schedule_with_warmup(optimizer,
                                             num_warmup_steps=(epoch_size // 10) * train_steps_per_epoch,
                                             num_training_steps=epoch_size * train_steps_per_epoch)
@@ -79,12 +86,7 @@ print(model)
 获取数据
 '''
 
-# 加载conll2003数据集
 
-nerdataset = Utils.convert_ner_data('data/origin/intercontest/relic_ner_handlewell.json')
-train_data, dev_data = Data.random_split(nerdataset, [int(len(nerdataset) * 0.9),
-                                                      len(nerdataset) - int(
-                                                          len(nerdataset) * 0.9)])
 
 label_all_tokens = True
 
