@@ -6,7 +6,7 @@ import torch
 import torchmetrics
 from torch.nn import CrossEntropyLoss
 from torch.optim import AdamW
-from transformers import AutoTokenizer, DataCollatorForTokenClassification
+from transformers import AutoTokenizer, DataCollatorForTokenClassification, get_cosine_schedule_with_warmup
 import torch.utils.data as Data
 from transformers.data.data_collator import tolist
 from visdom import Visdom
@@ -23,13 +23,13 @@ if len(sys.argv) >= 2:
     batch_size = int(sys.argv[1])
 if len(sys.argv) >= 3:
     epoch_size = int(sys.argv[2])
-#获取模型路径
-if len(sys.argv) >= 4 :
-    model_name=sys.argv[3]
+# 获取模型路径
+if len(sys.argv) >= 4:
+    model_name = sys.argv[3]
 
 ner_id_label = {0: 'O', 1: 'B-ORG', 2: 'M-ORG', 3: 'E-ORG', 4: 'B-LOC', 5: 'M-LOC', 6: 'E-LOC', 7: 'B-PER',
-                8: 'M-PER', 9: 'E-PER', 10: 'B-Time', 11: 'M-Time', 12: 'E-Time', 13: 'B-Book', 14: 'M-Book',
-                15: 'E-Book',16:'I-ORG',17:'I-LOC',18:'I-PER',19:'I-Time',20:'I-Book'}
+                8: 'M-PER', 9: 'E-PER', 10: 'B-TIME', 11: 'M-TIME', 12: 'E-TIME', 13: 'B-BOOK', 14: 'M-BOOK',
+                15: 'E-BOOK', 16: 'I-ORG', 17: 'I-LOC', 18: 'I-PER', 19: 'I-TIME', 20: 'I-BOOK'}
 ner_label_id = {}
 for key in ner_id_label:
     ner_label_id[ner_id_label[key]] = key
@@ -37,11 +37,43 @@ model = BertForNerAppendBiLstmAndCrf.from_pretrained(pretrained_model_name_or_pa
                                                      num_labels=len(ner_label_id))  # num_labels 测试用一下，看看参数是否传递
 batch_size = 4
 epoch_size = 10
+learning_rate = 5e-5
+weight_decay = 0.01
+full_fine_tuning = True
 # 用于梯度回归
-optim = AdamW(model.parameters(), lr=5e-5)  # 需要填写模型的参数
+if full_fine_tuning:
+    # model.named_parameters(): [bert, bilstm, classifier, crf]
+    bert_optimizer = list(model.bert.named_parameters())
+    lstm_optimizer = list(model.bilstm.named_parameters())
+    classifier_optimizer = list(model.classifier.named_parameters())
+    no_decay = ['bias', 'LayerNorm.bias', 'LayerNorm.weight']
+    optimizer_grouped_parameters = [
+        {'params': [p for n, p in bert_optimizer if not any(nd in n for nd in no_decay)],
+         'weight_decay': weight_decay},
+        {'params': [p for n, p in bert_optimizer if any(nd in n for nd in no_decay)],
+         'weight_decay': 0.0},
+        {'params': [p for n, p in lstm_optimizer if not any(nd in n for nd in no_decay)],
+         'lr': learning_rate * 5, 'weight_decay': weight_decay},
+        {'params': [p for n, p in lstm_optimizer if any(nd in n for nd in no_decay)],
+         'lr': learning_rate * 5, 'weight_decay': 0.0},
+        {'params': [p for n, p in classifier_optimizer if not any(nd in n for nd in no_decay)],
+         'lr': learning_rate * 5, 'weight_decay': weight_decay},
+        {'params': [p for n, p in classifier_optimizer if any(nd in n for nd in no_decay)],
+         'lr': learning_rate * 5, 'weight_decay': 0.0},
+        {'params': model.crf.parameters(), 'lr': learning_rate * 5}
+    ]
+    # only fine-tune the head classifier
+else:
+    param_optimizer = list(model.classifier.named_parameters())
+    optimizer_grouped_parameters = [{'params': [p for n, p in param_optimizer]}]
+optimizer = AdamW(optimizer_grouped_parameters, lr=learning_rate, correct_bias=False)
+train_steps_per_epoch = len() // batch_size
+scheduler = get_cosine_schedule_with_warmup(optimizer,
+                                            num_warmup_steps=(epoch_size // 10) * train_steps_per_epoch,
+                                            num_training_steps=epoch_size * train_steps_per_epoch)
+optim = AdamW(model.parameters(), lr=learning_rate)  # 需要填写模型的参数
 
 print(model)
-
 
 '''
 获取数据
@@ -49,7 +81,7 @@ print(model)
 
 # 加载conll2003数据集
 
-nerdataset = Utils.convert_ner_data('data/origin/intercontest/project-1-at-2023-02-13-15-23-af00a0ee.json')
+nerdataset = Utils.convert_ner_data('data/origin/intercontest/relic_ner_handlewell.json')
 train_data, dev_data = Data.random_split(nerdataset, [int(len(nerdataset) * 0.9),
                                                       len(nerdataset) - int(
                                                           len(nerdataset) * 0.9)])
@@ -110,6 +142,7 @@ print("-----------------------------------训练模式为%s---------------------
 model.to(device)
 model.train()
 
+
 def create_batch(data, tokenizer, ner_data_collator):
     tokenized_datasets = tokenize_and_align_labels(data, tokenizer)
     # 投喂进ner_data_collator的数据必须是数组
@@ -133,17 +166,14 @@ dev_dataloader = Data.DataLoader(
     dev_data, shuffle=True, collate_fn=create_batch_partial, batch_size=batch_size
 )
 
-
-
-
 # 实例化相关metrics的计算对象
-model_recall = torchmetrics.Recall(task='multiclass', average='macro', num_classes=len(ner_id_label)).to(device)
-model_precision = torchmetrics.Precision(task='multiclass', average='macro', num_classes=len(ner_id_label)).to(device)
-model_f1 = torchmetrics.F1Score(task='multiclass', average="macro", num_classes=len(ner_id_label)).to(device)
+model_recall = torchmetrics.Recall(average='macro', num_classes=len(ner_id_label)).to(device)
+model_precision = torchmetrics.Precision(average='macro', num_classes=len(ner_id_label)).to(device)
+model_f1 = torchmetrics.F1Score(average="macro", num_classes=len(ner_id_label)).to(device)
 
-viz = Visdom(env=u'ner_%s_train'%(model_name))
+viz = Visdom(env=u'ner_%s_train' % (model_name))
 name = ['total_loss']
-name_precision_recall_f1 = ['precision_score','recall_score', 'f1_score']
+name_precision_recall_f1 = ['precision_score', 'recall_score', 'f1_score']
 viz.line(Y=[(0.)], X=[(0.)], win="pitcure_1",
          opts=dict(title='train_loss', legend=name, xlabel='epoch', ylabel='loss', markers=False))  # 绘制起始位置 #win指的是图形id
 viz.line(Y=[(0.)], X=[(0.)], win="pitcure_2",
@@ -153,14 +183,9 @@ viz.line(Y=[(0., 0.)], X=[(0., 0.)], win="pitcure_3",
                    markers=False))  # 绘制起始位置
 
 
-
-
-
-
-
 #  评估函数，用作训练一轮，评估一轮使用
 def evaluate(model, eval_data_loader, epoch):
-    #评估之前将其重置
+    # 评估之前将其重置
     eval_total_loss = 0
     eval_step = 0
     # 依次处理每批数据
@@ -174,18 +199,17 @@ def evaluate(model, eval_data_loader, epoch):
         model_output = model(input_ids.to(device), token_type_ids=token_type_ids.to(device), labels=labels.to(device))
         config = model.config
         loss, outputs = model_output
-        predict=torch.argmax(outputs,dim=2)
+        predict = torch.argmax(outputs, dim=2)
 
         '''
         update 是计算当个batch的值  compute计算所有累加的值
         '''
-        precision_score=model_precision(predict, labels.to(device))
+        precision_score = model_precision(predict, labels.to(device))
         model_precision.update(predict, labels.to(device))
-        recall_score=model_recall(predict, labels.to(device))
+        recall_score = model_recall(predict, labels.to(device))
         model_recall.update(predict, labels.to(device))
-        f1_score=model_f1(predict, labels.to(device))
+        f1_score = model_f1(predict, labels.to(device))
         model_f1.update(predict, labels.to(device))
-
 
         # 损失函数的平均值
         # 按照概率最大原则，计算单字的标签编号
@@ -193,31 +217,22 @@ def evaluate(model, eval_data_loader, epoch):
         # 进行统计展示
         eval_step += 1
 
-
         eval_total_loss += loss.detach().to('cpu')
 
-        print('--eval---eopch: %d --precision得分: %.6f--recall得分: %.6f--- f1得分: %.6f- 损失函数: %.6f' % ( epoch, precision_score, recall_score,f1_score, total_loss))
+        print('--eval---eopch: %d --precision得分: %.6f--recall得分: %.6f--- f1得分: %.6f- 损失函数: %.6f' % (
+        epoch, precision_score, recall_score, f1_score, total_loss))
     viz.line(Y=[eval_total_loss / eval_step], X=[epoch + 1], win="pitcure_2", update='append')
-    viz.line(Y=[(model_precision.compute().to('cpu'), model_recall.compute().to('cpu') ,model_f1.compute().to('cpu'))],
+    viz.line(Y=[(model_precision.compute().to('cpu'), model_recall.compute().to('cpu'), model_f1.compute().to('cpu'))],
              X=[(epoch + 1, epoch + 1, epoch + 1)], win="pitcure_3", update='append')
     model_precision.reset()
     model_recall.reset()
     model_f1.reset()
 
 
-
-
-
-
-
-
-
-
-
 for epoch in range(epoch_size):  # 所有数据迭代总的次数
 
-    total_loss=0
-    total_step=0
+    total_loss = 0
+    total_step = 0
     for step, return_batch_data in enumerate(train_dataloader):  # 一个batch一个bach的训练完所有数据
 
         input_ids = return_batch_data['input_ids']
@@ -230,15 +245,15 @@ for epoch in range(epoch_size):  # 所有数据迭代总的次数
         loss, outputs = model_output
         optim.zero_grad()  # 每次计算的时候需要把上次计算的梯度设置为0
 
-        total_step+=1
-        total_loss+=loss.detach().cpu()
-
+        total_step += 1
+        total_loss += loss.detach().cpu()
 
         print('第%d个epoch的%d批数据的loss：%f' % (epoch + 1, step + 1, loss))
-        viz.line(Y=[total_loss / total_step],X=[ epoch + 1], win="pitcure_1", update='append')
+        viz.line(Y=[total_loss / total_step], X=[epoch + 1], win="pitcure_1", update='append')
 
         loss.backward()  # 反向传播
         optim.step()  # 用来更新参数，也就是的w和b的参数更新操作
+        scheduler.step()
 
     evaluate(model, dev_dataloader, epoch)
     # 每5个epoch保存一次
