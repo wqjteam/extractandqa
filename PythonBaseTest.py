@@ -101,12 +101,9 @@ mask=mask.gt(-3)
 # mask的形状是:[batch，seq_length]
 # 这句话由于torchcrf版本不同 进而 函数设置不同 batch_first=True 假设没有这句话  那么输入模型的第一个句子序列的 mask都是true，假设有这句话 就没事 ，mask是正常的
 # mask的作用是：因为是中文的句子 那么每句话都要padding 一定的长度 所以 告诉模型那些是padding的
-precise=torch.tensor([[0,2,3,2,2,100]])
-target=torch.tensor([[0,2,3,2,0,100]])
-a=torchmetrics.Precision(num_classes=4,mdmc_average ='samplewise',ignore_index=100)
-# print(a(precise,target))
-from sklearn.metrics import f1_score,precision_score,recall_score
-precise=torch.tensor([0,2,3,2,2,100])
-target=torch.tensor([0,2,3,2,0,100])
-oriF1=f1_score(target.numpy(),precise.numpy(),average="macro",)
-print("sklearn-f1:",oriF1)
+precise=torch.tensor([[0,2,3,2,2,-100,-100,-100,-100]])
+target=torch.tensor([[0,2,3,2,0,-100,-100,-100,-100]])
+target[target==-100]=4
+precise[precise==-100]=4
+a=torchmetrics.Precision(average="macro", num_classes=5,mdmc_average ='samplewise',ignore_index=4)
+print(a(precise,target))

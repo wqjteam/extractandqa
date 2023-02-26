@@ -168,10 +168,10 @@ dev_dataloader = Data.DataLoader(
     train_data, shuffle=True, collate_fn=create_batch_partial, batch_size=batch_size
 )
 
-# 实例化相关metrics的计算对象
-model_recall = torchmetrics.Recall(average='macro', num_classes=len(ner_id_label),mdmc_average ='samplewise',ignore_index=-100).to(device)
-model_precision = torchmetrics.Precision(average='macro', num_classes=len(ner_id_label),mdmc_average ='samplewise',ignore_index=-100).to(device)
-model_f1 = torchmetrics.F1Score(average="macro", num_classes=len(ner_id_label),mdmc_average ='samplewise',ignore_index=-100).to(device)
+# 实例化相关metrics的计算对象   len(ner_id_label)+1是为了ignore_index用 他不允许为负数值 这里忽略了，所以不影响结果
+model_recall = torchmetrics.Recall(average='macro', num_classes=len(ner_id_label)+1,mdmc_average ='samplewise',ignore_index=len(ner_id_label)).to(device)
+model_precision = torchmetrics.Precision(average='macro', num_classes=len(ner_id_label)+1,mdmc_average ='samplewise',ignore_index=len(ner_id_label)).to(device)
+model_f1 = torchmetrics.F1Score(average="macro", num_classes=len(ner_id_label)+1,mdmc_average ='samplewise',ignore_index=len(ner_id_label)).to(device)
 
 viz = Visdom(env=u'ner_%s_train' % (model_name))
 name = ['total_loss']
@@ -203,10 +203,13 @@ def evaluate(model, eval_data_loader, epoch):
         loss, outputs = model_output
         predict = torch.argmax(outputs, dim=2)
 
+        #这里方便计算用，-100 torchmetrics无法使用
+        predict[predict==-100]=len(ner_id_label)
+        labels[labels==-100]=len(ner_id_label)
         '''
         update 是计算当个batch的值  compute计算所有累加的值
         '''
-        print(input_ids)
+
         precision_score = model_precision(predict, labels.to(device))
         model_precision.update(predict, labels.to(device))
         recall_score = model_recall(predict, labels.to(device))
