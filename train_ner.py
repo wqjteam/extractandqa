@@ -45,7 +45,7 @@ train_data, dev_data = Data.random_split(nerdataset, [int(len(nerdataset) * 0.9)
 batch_size = 4
 epoch_size = 10
 learning_rate = 5e-5
-weight_decay = 0.01
+weight_decay = 0.01 #最终目的是防止过拟合
 full_fine_tuning = True
 # 用于梯度回归
 if full_fine_tuning:
