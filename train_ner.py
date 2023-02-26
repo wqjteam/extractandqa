@@ -1,16 +1,18 @@
+import os
 import sys
 from functools import partial
 
 import torch
 import torch.utils.data as Data
 import torchmetrics
+from torch import nn
 from torch.optim import AdamW
 from transformers import AutoTokenizer, DataCollatorForTokenClassification, get_cosine_schedule_with_warmup
 from visdom import Visdom
 
 from PraticeOfTransformers import Utils
 from PraticeOfTransformers.CustomModelForNer import BertForNerAppendBiLstmAndCrf
-
+os.environ['CUDA_VISIBLE_DEVICES'] = '0,1' #指定GPU编号 多gpu训练
 model_name = 'bert-base-chinese'
 batch_size = 2
 epoch_size = 500
@@ -132,9 +134,14 @@ ner_align_data_collator = DataCollatorForTokenClassification(
 # mlm_align_data_collator = DataCollatorForTokenClassification(tokenizer)   # 他会对于一些label的空余的位置进行补齐 对于data_collator输入必须有labels属性
 
 # 看是否用cpu或者gpu训练
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
+# 看是否用cpu或者gpu训练
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 print("-----------------------------------训练模式为%s------------------------------------" % device)
+if torch.cuda.is_available() and torch.cuda.device_count() > 1:
+    device_ids = list(range(torch.cuda.device_count()))
+
+    model = nn.DataParallel(model, device_ids=device_ids)
+
 model.to(device)
 model.train()
 
@@ -193,7 +200,10 @@ def evaluate(model, eval_data_loader, epoch):
         labels = return_batch_data['labels']
 
         model_output = model(input_ids.to(device), token_type_ids=token_type_ids.to(device), labels=labels.to(device))
-        config = model.config
+        if torch.cuda.is_available() and torch.cuda.device_count() > 1:
+            model_config = model.module.config
+        else:
+            model_config = model.config
         loss, outputs = model_output
         predict = torch.argmax(outputs, dim=2)
 
@@ -241,7 +251,10 @@ for epoch in range(epoch_size):  # 所有数据迭代总的次数
         labels = return_batch_data['labels']
 
         model_output = model(input_ids.to(device), token_type_ids=token_type_ids.to(device), labels=labels.to(device))
-        config = model.config
+        if torch.cuda.is_available() and torch.cuda.device_count() > 1:
+            model_config = model.module.config
+        else:
+            model_config = model.config
         loss, outputs = model_output
         optim.zero_grad()  # 每次计算的时候需要把上次计算的梯度设置为0
 
