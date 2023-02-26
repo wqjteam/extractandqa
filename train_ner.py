@@ -1,20 +1,14 @@
 import sys
 from functools import partial
 
-import pandas as pd
 import torch
+import torch.utils.data as Data
 import torchmetrics
-from torch.nn import CrossEntropyLoss
 from torch.optim import AdamW
 from transformers import AutoTokenizer, DataCollatorForTokenClassification, get_cosine_schedule_with_warmup
-import torch.utils.data as Data
-from transformers.data.data_collator import tolist
 from visdom import Visdom
 
-from PraticeOfTransformers import CustomModelForNer, Utils
-from PraticeOfTransformers.CustomModelForNSPQA import BertForUnionNspAndQA
-from datasets import load_dataset
-
+from PraticeOfTransformers import Utils
 from PraticeOfTransformers.CustomModelForNer import BertForNerAppendBiLstmAndCrf
 
 model_name = 'bert-base-chinese'
