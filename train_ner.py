@@ -43,7 +43,7 @@ model = BertForNerAppendBiLstmAndCrf.from_pretrained(pretrained_model_name_or_pa
 # 加载数据集
 nerdataset = Utils.convert_ner_data('data/origin/intercontest/relic_ner_handlewell.json')
 # nerdataset = list(filter(lambda x: ''.join(x[0]).startswith("东汉玉蝉"), nerdataset))
-
+nerdataset=nerdataset[0:10]
 train_data, dev_data = Data.random_split(nerdataset, [int(len(nerdataset) * 0.9),
                                                       len(nerdataset) - int(
                                                           len(nerdataset) * 0.9)])
@@ -169,9 +169,9 @@ dev_dataloader = Data.DataLoader(
 )
 
 # 实例化相关metrics的计算对象
-model_recall = torchmetrics.Recall(average='macro', num_classes=len(ner_id_label),mdmc_average ='samplewise').to(device)
-model_precision = torchmetrics.Precision(average='macro', num_classes=len(ner_id_label),mdmc_average ='samplewise').to(device)
-model_f1 = torchmetrics.F1Score(average="macro", num_classes=len(ner_id_label),mdmc_average ='samplewise').to(device)
+model_recall = torchmetrics.Recall(average='macro', num_classes=len(ner_id_label),mdmc_average ='samplewise',ignore_index=-100).to(device)
+model_precision = torchmetrics.Precision(average='macro', num_classes=len(ner_id_label),mdmc_average ='samplewise',ignore_index=-100).to(device)
+model_f1 = torchmetrics.F1Score(average="macro", num_classes=len(ner_id_label),mdmc_average ='samplewise',ignore_index=-100).to(device)
 
 viz = Visdom(env=u'ner_%s_train' % (model_name))
 name = ['total_loss']
@@ -206,6 +206,7 @@ def evaluate(model, eval_data_loader, epoch):
         '''
         update 是计算当个batch的值  compute计算所有累加的值
         '''
+        print(input_ids)
         precision_score = model_precision(predict, labels.to(device))
         model_precision.update(predict, labels.to(device))
         recall_score = model_recall(predict, labels.to(device))
