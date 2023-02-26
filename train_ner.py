@@ -29,7 +29,8 @@ if len(sys.argv) >= 4:
 
 ner_id_label = {0: 'O', 1: 'B-ORG', 2: 'M-ORG', 3: 'E-ORG', 4: 'B-LOC', 5: 'M-LOC', 6: 'E-LOC', 7: 'B-PER',
                 8: 'M-PER', 9: 'E-PER', 10: 'B-TIME', 11: 'M-TIME', 12: 'E-TIME', 13: 'B-BOOK', 14: 'M-BOOK',
-                15: 'E-BOOK', 16: 'I-ORG', 17: 'I-LOC', 18: 'I-PER', 19: 'I-TIME', 20: 'I-BOOK'}
+                15: 'E-BOOK', 16: 'I-ORG', 17: 'I-LOC', 18: 'I-PER', 19: 'I-TIME', 20: 'I-BOOK', 21: 'S-ORG',
+                22: 'S-LOC', 23: 'S-PER', 24: 'S-TIME', 24: 'S-BOOK'}
 ner_label_id = {}
 for key in ner_id_label:
     ner_label_id[ner_id_label[key]] = key
@@ -38,14 +39,16 @@ model = BertForNerAppendBiLstmAndCrf.from_pretrained(pretrained_model_name_or_pa
 
 # 加载数据集
 nerdataset = Utils.convert_ner_data('data/origin/intercontest/relic_ner_handlewell.json')
-train_data, dev_data = Data.random_split(nerdataset, [int(len(nerdataset) * 0.9),
+nerdataset = list(filter(lambda x: ''.join(x[0]).startswith("东汉玉蝉"), nerdataset))
+# passage_keyword_json = nerdataset[nerdataset.nsp.startwith("东汉玉蝉")]
+train_data, dev_data = Data.random_split(nerdataset, [int(len(nerdataset) * 1),
                                                       len(nerdataset) - int(
-                                                          len(nerdataset) * 0.9)])
-
+                                                          len(nerdataset) * 1)])
+train_data
 batch_size = 4
 epoch_size = 10
 learning_rate = 5e-5
-weight_decay = 0.01 #最终目的是防止过拟合
+weight_decay = 0.01  # 最终目的是防止过拟合
 full_fine_tuning = True
 # 用于梯度回归
 if full_fine_tuning:
@@ -85,8 +88,6 @@ print(model)
 '''
 获取数据
 '''
-
-
 
 label_all_tokens = True
 
@@ -165,13 +166,13 @@ train_dataloader = Data.DataLoader(
 )
 
 dev_dataloader = Data.DataLoader(
-    dev_data, shuffle=True, collate_fn=create_batch_partial, batch_size=batch_size
+    train_data, shuffle=True, collate_fn=create_batch_partial, batch_size=batch_size
 )
 
 # 实例化相关metrics的计算对象
-model_recall = torchmetrics.Recall(average='macro', num_classes=len(ner_id_label)).to(device)
-model_precision = torchmetrics.Precision(average='macro', num_classes=len(ner_id_label)).to(device)
-model_f1 = torchmetrics.F1Score(average="macro", num_classes=len(ner_id_label)).to(device)
+model_recall = torchmetrics.Recall(average='macro', num_classes=len(ner_id_label),mdmc_average ='samplewise').to(device)
+model_precision = torchmetrics.Precision(average='macro', num_classes=len(ner_id_label),mdmc_average ='samplewise').to(device)
+model_f1 = torchmetrics.F1Score(average="macro", num_classes=len(ner_id_label),mdmc_average ='samplewise').to(device)
 
 viz = Visdom(env=u'ner_%s_train' % (model_name))
 name = ['total_loss']
@@ -222,7 +223,7 @@ def evaluate(model, eval_data_loader, epoch):
         eval_total_loss += loss.detach().to('cpu')
 
         print('--eval---eopch: %d --precision得分: %.6f--recall得分: %.6f--- f1得分: %.6f- 损失函数: %.6f' % (
-        epoch, precision_score, recall_score, f1_score, total_loss))
+            epoch, precision_score, recall_score, f1_score, total_loss))
     viz.line(Y=[eval_total_loss / eval_step], X=[epoch + 1], win="pitcure_2", update='append')
     viz.line(Y=[(model_precision.compute().to('cpu'), model_recall.compute().to('cpu'), model_f1.compute().to('cpu'))],
              X=[(epoch + 1, epoch + 1, epoch + 1)], win="pitcure_3", update='append')
@@ -253,8 +254,8 @@ for epoch in range(epoch_size):  # 所有数据迭代总的次数
         print('第%d个epoch的%d批数据的loss：%f' % (epoch + 1, step + 1, loss))
         viz.line(Y=[total_loss / total_step], X=[epoch + 1], win="pitcure_1", update='append')
 
+        scheduler.step()  # warm_up
         loss.backward()  # 反向传播
-        scheduler.step() #warm_up
         optim.step()  # 用来更新参数，也就是的w和b的参数更新操作
 
     evaluate(model, dev_dataloader, epoch)
