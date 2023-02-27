@@ -181,7 +181,7 @@ viz.line(Y=[(0.)], X=[(0.)], win="pitcure_1",
          opts=dict(title='train_loss', legend=name, xlabel='epoch', ylabel='loss', markers=False))  # 绘制起始位置 #win指的是图形id
 viz.line(Y=[(0.)], X=[(0.)], win="pitcure_2",
          opts=dict(title='eval_loss', legend=name, xlabel='epoch', ylabel='loss', markers=False))  # 绘制起始位置
-viz.line(Y=[(0., 0.)], X=[(0., 0.)], win="pitcure_3",
+viz.line(Y=[(0., 0.,0.)], X=[(0., 0.,0.)], win="pitcure_3",
          opts=dict(title='eval_precision_recall_f1', legend=name_precision_recall_f1, xlabel='epoch', ylabel='score',
                    markers=False))  # 绘制起始位置
 
