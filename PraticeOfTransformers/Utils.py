@@ -2,9 +2,11 @@ import json
 
 import collections
 import os
+import string
 
 import pandas as pd
 from tqdm import tqdm
+from transformers import BertTokenizer, AutoTokenizer
 
 
 def pad_sequense_python(list_args, fillvalue):
@@ -164,7 +166,28 @@ def read_file(self, file_path):
     return samples
 
 
+def getSpellWordForDigitEn(text_list):
+
+    strlist = []
+    length = len(text_list)
+    front = 0
+    id_pair=[]
+    while(front < length):
+        if text_list[front] in string.ascii_lowercase + string.ascii_uppercase or text_list[front].isdigit():
+            numberordigitrear = front
+            while(front < length and (text_list[front] in string.ascii_lowercase + string.ascii_uppercase or text_list[front].isdigit())):
+                front+=1
+            strlist.append(text_list[numberordigitrear:front])
+            id_pair.extend([len(strlist)-1 for _ in range(front-numberordigitrear)]) #添加相对应新的index
+        else:
+            strlist.append(text_list[front])
+            id_pair.append(len(strlist)-1) #添加相对应新的index
+            front+=1
+    assert(len(strlist)-1,id_pair[-1]) #判断一下，免得出问题
+    return strlist,id_pair
+
 #
+
 '''
 从json转换text label的格式
 有两套标签
@@ -191,11 +214,13 @@ def convert_ner_data(file_path):
 
     text_label_tuple=[]
     for idx, item in data.iterrows():
-        text = item['text']
-        if text is None:
-            text = ''
-        text_list = list(text)
-        label_list = []
+        text1 = item['text']
+        #这里是 对数据和英文进行了一次分词
+        text_after,id_pair=getSpellWordForDigitEn(text1)
+        if text_after is None:
+            text_after = ''
+        text_list = list(text_after)
+        # label_list = []
         labels = item['label']
         label_list = ['O' for i in range(len(text_list))] #默认添加
         if labels is  None :
@@ -203,8 +228,16 @@ def convert_ner_data(file_path):
         else:
 
             for label_item in labels:
-                start = label_item['start']
-                end = label_item['end']
+                start = id_pair[label_item['start']]
+                # str是默认取前不取后，所以在最后一个位置的话，label_item['labels'][0]会报错
+                if label_item['end']==len(text1):
+
+                    end=len(text_after)
+
+                else:
+
+                    end = id_pair[label_item['end']]
+
                 label = label_item['labels'][0]
 
 
@@ -225,5 +258,5 @@ def convert_qa_nsp_data(file_path):
 
 
 if __name__ == '__main__':
-    data=convert_ner_data('../data/origin/intercontest/project-1-at-2023-02-13-15-23-af00a0ee.json')
+    data=convert_ner_data('../data/origin/intercontest/relic_ner_example.json')
     print(data)

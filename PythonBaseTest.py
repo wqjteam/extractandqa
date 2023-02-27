@@ -6,7 +6,7 @@ import torchmetrics
 from torch import tensor
 from torch.nn import CrossEntropyLoss
 from transformers import AutoTokenizer, DataCollatorForLanguageModeling, DataCollatorForTokenClassification, \
-    DataCollatorForWholeWordMask
+    DataCollatorForWholeWordMask, BertTokenizer
 
 import CommonUtil
 from PraticeOfTransformers import Utils
@@ -37,9 +37,10 @@ out = func(pred, target)
 # print(find_all_index)
 
 model_name = 'bert-base-chinese'
-tokenizer = AutoTokenizer.from_pretrained(model_name)
+tokenizer = BertTokenizer.from_pretrained(model_name)
 
-sentence="长治市博物馆，位于长治市太行西街。1990年9月动工兴建新馆，1992年10月落成，占地面积13340平方米，建筑面积8200平方米"
+sentence="长治市博物馆，位于长治市太行西街。1990年9月动工兴建新馆，1992年10月落成，占地面积13340平方米，建筑面积8200km"
+spilltoken=tokenizer.tokenize(sentence)
 sentence="13340平方"
 encoded_dict = tokenizer.encode_plus(
     text=sentence,

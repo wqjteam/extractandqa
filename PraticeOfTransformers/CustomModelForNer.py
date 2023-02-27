@@ -49,7 +49,7 @@ class BertForNerAppendBiLstmAndCrf(BertPreTrainedModel):
             hidden_size=config.hidden_size // 2,  #隐藏层的大小（即隐藏层节点数量），输出向量的维度等于隐藏节点数； 因为是双向lstm 所以除以2
             batch_first=True,
             num_layers=2,
-            dropout=0.5,  # 0.5 默认值0，除最后一层，每一层的输出都进行dropout；
+          #  dropout=0.5,  # 0.5 默认值0，除最后一层，每一层的输出都进行dropout；
             bidirectional=True #双向
         )
         self.classifier = nn.Linear(in_features=config.hidden_size, out_features=config.num_labels) #得到bert+bilstm预测标签
@@ -85,10 +85,12 @@ class BertForNerAppendBiLstmAndCrf(BertPreTrainedModel):
             '''
             crf 注意到这个返回值为对数似然，所以当你作为损失函数时，需要在这个值前添加负号.。默认地，这个对数似然是批上的求和。
             '''
-            loss = self.crf(emissions=logits, tags=labels, mask=loss_mask) * (-1) #mask的作用是：因为是中文的句子 那么每句话都要padding 一定的长度 所以 告诉模型那些是padding的
+            loss = self.crf(emissions=logits, tags=labels, mask=loss_mask,reduction='mean') * (-1) #mask的作用是：因为是中文的句子 那么每句话都要padding 一定的长度 所以 告诉模型那些是padding的
+            loss=torch.mean(loss,dim=-1)
             outputs = (loss,) + outputs
-
-        # contain: (loss), scores
+        else:
+            predict =self.crf.decode(logits)
+            outputs = (predict,) + outputs
         return outputs
 
     def decode(self, input_ids, attention_mask, segment_ids):
