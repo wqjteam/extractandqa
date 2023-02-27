@@ -44,7 +44,16 @@ train_data, dev_data = Data.random_split(nerdataset, [int(len(nerdataset) * 0.9)
                                                       len(nerdataset) - int(
                                                           len(nerdataset) * 0.9)])
 
-
+'''
+非bert层的学习率需要提高 crf需要为bert的
+bert 给是10−5量级
+crf  给10−2量级别 即bert的是1000倍
+而对其biases参数和BN层的gamma和beta参数不进行衰减
+首先正则化主要是为了防止过拟合，而过拟合一般表现为模型对于输入的微小改变产生了输出的较大差异，
+这主要是由于有些参数w过大的关系，通过对||w||进行惩罚，可以缓解这种问题。
+而如果对||b||进行惩罚，其实是没有作用的，因为在对输出结果的贡献中
+参数b对于输入的改变是不敏感的，不管输入改变是大还是小，参数b的贡献就只是加个偏置而已，他不背锅
+'''
 # 用于梯度回归
 if full_fine_tuning:
     # model.named_parameters(): [bert, bilstm, classifier, crf]
@@ -55,17 +64,17 @@ if full_fine_tuning:
     optimizer_grouped_parameters = [
         {'params': [p for n, p in bert_optimizer if not any(nd in n for nd in no_decay)],
          'weight_decay': weight_decay},
-        {'params': [p for n, p in bert_optimizer if any(nd in n for nd in no_decay)],
+        {'params': [p for n, p in bert_optimizer if any(nd in n for nd in no_decay)], #对于在no_decay 不进行正则化
          'weight_decay': 0.0},
         {'params': [p for n, p in lstm_optimizer if not any(nd in n for nd in no_decay)],
-         'lr': learning_rate * 5, 'weight_decay': weight_decay},
+         'lr': learning_rate * 5 *20, 'weight_decay': weight_decay},
         {'params': [p for n, p in lstm_optimizer if any(nd in n for nd in no_decay)],
-         'lr': learning_rate * 5, 'weight_decay': 0.0},
+         'lr': learning_rate * 5 *20, 'weight_decay': 0.0},
         {'params': [p for n, p in classifier_optimizer if not any(nd in n for nd in no_decay)],
-         'lr': learning_rate * 5, 'weight_decay': weight_decay},
+         'lr': learning_rate * 5 *20, 'weight_decay': weight_decay},
         {'params': [p for n, p in classifier_optimizer if any(nd in n for nd in no_decay)],
-         'lr': learning_rate * 5, 'weight_decay': 0.0},
-        {'params': model.crf.parameters(), 'lr': learning_rate * 5}
+         'lr': learning_rate * 5 *20, 'weight_decay': 0.0},
+        {'params': model.crf.parameters(), 'lr': learning_rate * 5 * 200}
     ]
     # only fine-tune the head classifier
 else:
@@ -264,7 +273,7 @@ for epoch in range(epoch_size):  # 所有数据迭代总的次数
         print('第%d个epoch的%d批数据的loss：%f' % (epoch + 1, step + 1, torch.mean(loss).detach().cpu()))
 
 
-        scheduler.step()  # warm_up
+        #scheduler.step()  # warm_up
         loss.backward(torch.ones_like(loss))  # 反向传播
         optim.step()  # 用来更新参数，也就是的w和b的参数更新操作
     viz.line(Y=[total_loss / total_step], X=[epoch + 1], win="pitcure_1", update='append')
