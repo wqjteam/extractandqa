@@ -227,10 +227,10 @@ def evaluate(model, eval_data_loader, epoch):
         # 进行统计展示
         eval_step += 1
 
-        eval_total_loss += loss.detach().to('cpu')
+        eval_total_loss +=  torch.mean(loss).detach().cpu()
 
         print('--eval---eopch: %d --precision得分: %.6f--recall得分: %.6f--- f1得分: %.6f- 损失函数: %.6f' % (
-            epoch, precision_score, recall_score, f1_score, total_loss))
+            epoch, precision_score, recall_score, f1_score, torch.mean(loss).detach().cpu()))
     viz.line(Y=[eval_total_loss / eval_step], X=[epoch + 1], win="pitcure_2", update='append')
     viz.line(Y=[(model_precision.compute().to('cpu'), model_recall.compute().to('cpu'), model_f1.compute().to('cpu'))],
              X=[(epoch + 1, epoch + 1, epoch + 1)], win="pitcure_3", update='append')
@@ -259,13 +259,13 @@ for epoch in range(epoch_size):  # 所有数据迭代总的次数
         optim.zero_grad()  # 每次计算的时候需要把上次计算的梯度设置为0
 
         total_step += 1
-        total_loss += loss.detach().cpu()
+        total_loss += torch.mean(loss).detach().cpu()
 
-        print('第%d个epoch的%d批数据的loss：%f' % (epoch + 1, step + 1, loss))
+        print('第%d个epoch的%d批数据的loss：%f' % (epoch + 1, step + 1, torch.mean(loss).detach().cpu()))
 
 
         scheduler.step()  # warm_up
-        loss.backward()  # 反向传播
+        loss.backward(torch.ones_like(loss))  # 反向传播
         optim.step()  # 用来更新参数，也就是的w和b的参数更新操作
     viz.line(Y=[total_loss / total_step], X=[epoch + 1], win="pitcure_1", update='append')
     evaluate(model, dev_dataloader, epoch)
