@@ -19,8 +19,6 @@ from transformers.models.bert.modeling_bert import BertOnlyMLMHead
 from transformers.utils import ModelOutput
 
 
-
-
 class NspAndQAModelOutput(ModelOutput):
     mlm_prediction_scores: torch.FloatTensor = None
     nsp_relationship_scores: torch.FloatTensor = None
@@ -34,38 +32,34 @@ class NspAndQAModelOutput(ModelOutput):
 # 如果继承PreTrainedModel 需要实现 _init_weights(self, module) 方法
 # 如果继承BertPreTrainedModel 则不需要实现该方法
 class BertForNerAppendBiLstmAndCrf(BertPreTrainedModel):
-
-
     _keys_to_ignore_on_load_unexpected = [r"pooler"]
 
     def __init__(self, config):
         super(BertForNerAppendBiLstmAndCrf, self).__init__(config)
         self.num_labels = config.num_labels
 
-        self.bert = BertModel(config) #解决问题：NER标注数据少，文本信息抽取效果不佳
+        self.bert = BertModel(config)  # 解决问题：NER标注数据少，文本信息抽取效果不佳
 
-        for param in self.bert.parameters(): #bert 不更新参数
+        for param in self.bert.parameters():  # bert 不更新参数
             param.requires_grad = False
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
         self.bilstm = nn.LSTM(  # 解决问题：抽取用于实体分类的包含上下文的文本信息
             input_size=config.hidden_size,  # 和bert encode的输出层 也即是隐藏层
-            hidden_size=config.hidden_size // 2,  #隐藏层的大小（即隐藏层节点数量），输出向量的维度等于隐藏节点数； 因为是双向lstm 所以除以2
+            hidden_size=config.hidden_size // 2,  # 隐藏层的大小（即隐藏层节点数量），输出向量的维度等于隐藏节点数； 因为是双向lstm 所以除以2
             batch_first=True,
             num_layers=2,
-          #  dropout=0.5,  # 0.5 默认值0，除最后一层，每一层的输出都进行dropout；
-            bidirectional=True #双向
+            #  dropout=0.5,  # 0.5 默认值0，除最后一层，每一层的输出都进行dropout；
+            bidirectional=True  # 双向
         )
-        self.classifier = nn.Linear(in_features=config.hidden_size, out_features=config.num_labels) #得到bert+bilstm预测标签
+        self.classifier = nn.Linear(in_features=config.hidden_size, out_features=config.num_labels)  # 得到bert+bilstm预测标签
 
-        #crf的第一个词必须是开启的，说明cls这个字符的去掉
-        self.crf = CRF(config.num_labels, batch_first=True)  #用来约束标签 实体内标签分类的一致性，T个N分类问题转化为NT的分类问题
-
-
+        # crf的第一个词必须是开启的，说明cls这个字符的去掉
+        self.crf = CRF(config.num_labels, batch_first=True)  # 用来约束标签 实体内标签分类的一致性，T个N分类问题转化为NT的分类问题
 
         self.init_weights()
 
     def forward(self, input_ids, token_type_ids=None, attention_mask=None, labels=None,
-                position_ids=None, inputs_embeds=None, head_mask=None):
+                position_ids=None, inputs_embeds=None, head_mask=None,is_test=False):
 
         outputs = self.bert(input_ids=input_ids,
                             attention_mask=attention_mask,
@@ -81,19 +75,20 @@ class BertForNerAppendBiLstmAndCrf(BertPreTrainedModel):
         padded_sequence_output = self.dropout(lstm_output)
         # 得到判别值 标签的判别
         logits = self.classifier(padded_sequence_output)
-        outputs = (logits,)
-        if labels is not None:
-            loss_mask = labels.gt(-1) #作为mask 相等于pading这类的不计算 ，这里遇到问题了 我cls的标签在第一个，这里不允许
-            labels[labels==-100]=0 #这里是-100 计算会报错，设置为0，这样就在num_labels的范围内，但是loss_mask的设置在计算loss的时候是影响 loss
-            '''
-            crf 注意到这个返回值为对数似然，所以当你作为损失函数时，需要在这个值前添加负号.。默认地，这个对数似然是批上的求和。
-            '''
-            loss = self.crf(emissions=logits, tags=labels, mask=loss_mask,reduction='mean') * (-1) #mask的作用是：因为是中文的句子 那么每句话都要padding 一定的长度 所以 告诉模型那些是padding的
-            loss=torch.mean(loss,dim=-1)
-            outputs = (loss,) + outputs
+
+        loss_mask = labels.gt(-1)  # 作为mask 相等于pading这类的不计算 ，这里遇到问题了 我cls的标签在第一个，这里不允许
+        labels[labels == -100] = 0  # 这里是-100 计算会报错，设置为0，这样就在num_labels的范围内，但是loss_mask的设置在计算loss的时候是影响 loss
+        '''
+        crf 注意到这个返回值为对数似然，所以当你作为损失函数时，需要在这个值前添加负号.。默认地，这个对数似然是批上的求和。
+        '''
+        loss = self.crf(emissions=logits, tags=labels, mask=loss_mask, reduction='mean') * (-1)
+        loss = torch.mean(loss, dim=-1)
+        outputs = (loss,)
+        if not is_test:
+            outputs = outputs + (logits,)
         else:
-            predict =self.crf.decode(logits)
-            outputs = (predict,) + outputs
+            predict = self.crf.decode(logits)
+            outputs = outputs + (predict,)
         return outputs
 
     def decode(self, input_ids, attention_mask, segment_ids):

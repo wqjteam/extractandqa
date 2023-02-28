@@ -43,9 +43,7 @@ encoded_dict = tokenizer.batch_encode_plus(
     max_length=128,  # 填充 & 截断长度
     truncation=True,
     padding='longest',
-    return_attention_mask=True,  # 返回 attn. masks.
-    is_split_into_words=True,
-return_offsets_mapping=True
+    return_attention_mask=True # 返回 attn. masks.
 )
 encoded_dict.word_ids(batch_index=0)
 # lmtokener=DataCollatorForWholeWordMask(tokenizer=tokenizer,
@@ -60,7 +58,7 @@ lmtokener=DataCollatorForWholeWordMaskOriginal(tokenizer=tokenizer,
 # input=[{'input_ids':encoded_dict['input_ids'],'token_type_ids':encoded_dict['token_type_ids'],'labels':encoded_dict['attention_mask']} ]
 input=[encoded_dict['input_ids']]
 temp=[list()]
-aa=lmtokener(zip(input,temp))
+# aa=lmtokener(zip(input,temp))
 
 
 #
@@ -100,8 +98,8 @@ mask=mask.gt(-3)
 # 这句话由于torchcrf版本不同 进而 函数设置不同 batch_first=True 假设没有这句话  那么输入模型的第一个句子序列的 mask都是true，假设有这句话 就没事 ，mask是正常的
 # mask的作用是：因为是中文的句子 那么每句话都要padding 一定的长度 所以 告诉模型那些是padding的
 precise=torch.tensor([[0,2,3,2,2,-100,-100,-100,-100]])
-target=torch.tensor([[0,2,3,2,0,-100,-100,-100,-100]])
+target=torch.tensor([[0,2,3,2,0,-100,2,-100,-100]])
 target[target==-100]=4
 precise[precise==-100]=4
 a=torchmetrics.Precision(average="macro", num_classes=5,mdmc_average ='samplewise',ignore_index=4)
-print(a(precise,target))
+print(a(precise,target=target))

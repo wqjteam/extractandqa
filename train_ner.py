@@ -29,8 +29,8 @@ if len(sys.argv) >= 3:
 if len(sys.argv) >= 4:
     model_name = sys.argv[3]
 
-ner_id_label = {0: 'O', 1: 'B-ORG', 2: 'B-PER', 3: 'B-LOC', 4: 'B-TIME', 5: 'B-BOOK',
-                6: 'I-ORG', 7: 'I-PER', 8: 'I-LOC', 9: 'I-TIME', 10: 'I-BOOK'}
+ner_id_label = {0:'[CLS]',1:'[SEP]',2: 'O', 3: 'B-ORG', 4: 'B-PER', 5: 'B-LOC', 6: 'B-TIME', 7: 'B-BOOK',
+                8: 'I-ORG', 9: 'I-PER', 10: 'I-LOC', 11: 'I-TIME', 12: 'I-BOOK'}
 ner_label_id = {}
 for key in ner_id_label:
     ner_label_id[ner_id_label[key]] = key
@@ -40,7 +40,7 @@ model = BertForNerAppendBiLstmAndCrf.from_pretrained(pretrained_model_name_or_pa
 # 加载数据集
 nerdataset = Utils.convert_ner_data('data/origin/intercontest/relic_ner_handlewell.json')
 # nerdataset = list(filter(lambda x: ''.join(x[0]).startswith("小双桥遗址"), nerdataset))
-# nerdataset=nerdataset[0:10]
+nerdataset=nerdataset[0:100]
 train_data, dev_data = Data.random_split(nerdataset, [int(len(nerdataset) * 0.9),
                                                       len(nerdataset) - int(
                                                           len(nerdataset) * 0.9)])
@@ -108,7 +108,7 @@ word_ids将每一个subtokens位置都对应了一个word的下标。
 def tokenize_and_align_labels(examples, tokenizer):
     tokens, takens_labels = zip(*examples)
     # tokens, takens_labels = examples
-    tokenized_inputs = tokenizer.batch_encode_plus(batch_text_or_text_pairs=list(tokens), add_special_tokens=False,
+    tokenized_inputs = tokenizer.batch_encode_plus(batch_text_or_text_pairs=list(tokens), add_special_tokens=True,
                                                    truncation=True, is_split_into_words=True)
     # print(''.join(tokens[0]))
     # print(''.join(tokenizer.convert_ids_to_tokens(tokenized_inputs['input_ids'][0])))
@@ -120,10 +120,17 @@ def tokenize_and_align_labels(examples, tokenizer):
         label_ids = []
 
         # 遍历subtokens位置索引
-        for word_idx in word_ids:
+        for word_index,word_idx in enumerate(word_ids):
+            #处理特殊字符
             if word_idx is None:
-                # 将特殊字符的label设置为-100
-                label_ids.append(-100)
+
+                if word_index==0:
+                    label_ids.append(ner_label_id['[CLS]'])
+                elif word_index==len(word_ids)-1:
+                    label_ids.append(ner_label_id['[SEP]'])
+                else:
+                    # 将特殊字符的label设置为-100,不会出现 pad的，但还是设置下
+                    label_ids.append(-100)
             # We set the label for the first token of each word.
             elif word_idx != previous_word_idx:
                 label_ids.append(ner_label_id[label[word_idx]])
@@ -182,11 +189,11 @@ dev_dataloader = Data.DataLoader(
 )
 
 # 实例化相关metrics的计算对象   len(ner_id_label)+1是为了ignore_index用 他不允许为负数值 这里忽略了，所以不影响结果
-model_recall = torchmetrics.Recall(average='macro', num_classes=len(ner_id_label) + 1, mdmc_average='samplewise',
+model_recall = torchmetrics.Recall( num_classes=len(ner_id_label) + 1, mdmc_average='global',
                                    ignore_index=len(ner_id_label)).to(device)
-model_precision = torchmetrics.Precision(average='macro', num_classes=len(ner_id_label) + 1, mdmc_average='samplewise',
+model_precision = torchmetrics.Precision(num_classes=len(ner_id_label) + 1, mdmc_average='global',
                                          ignore_index=len(ner_id_label)).to(device)
-model_f1 = torchmetrics.F1Score(average="macro", num_classes=len(ner_id_label) + 1, mdmc_average='samplewise',
+model_f1 = torchmetrics.F1Score(num_classes=len(ner_id_label) + 1, mdmc_average='global',
                                 ignore_index=len(ner_id_label)).to(device)
 
 viz = Visdom(env=u'ner_%s_train' % (model_name))
@@ -214,17 +221,17 @@ def evaluate(model, eval_data_loader, epoch):
         attention_masks = return_batch_data['attention_mask']
         labels = return_batch_data['labels']
 
-        model_output = model(input_ids.to(device), token_type_ids=token_type_ids.to(device), labels=labels.to(device))
+        model_output = model(input_ids.to(device), token_type_ids=token_type_ids.to(device), labels=labels.to(device),is_test=True)
         if torch.cuda.is_available() and torch.cuda.device_count() > 1:
             model_config = model.module.config
         else:
             model_config = model.config
         loss, outputs = model_output
-        predict = torch.argmax(outputs, dim=2)
+        predict = torch.squeeze(outputs,dim=0)
 
         # 这里方便计算用，-100 torchmetrics无法使用
-        predict[predict == -100] = len(ner_id_label)
-        labels[labels == -100] = len(ner_id_label)
+        # predict[predict == -100] = len(ner_id_label)
+        labels[labels == -100] = len(ner_id_label) # predict 或者 labels 只要出现ignore_index 则不会统计在内
         '''
         update 是计算当个batch的值  compute计算所有累加的值
         '''
