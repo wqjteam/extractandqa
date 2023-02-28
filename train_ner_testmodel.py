@@ -18,7 +18,7 @@ os.environ['CUDA_VISIBLE_DEVICES'] = '0,1'  # 指定GPU编号 多gpu训练
 model_name = 'bert-base-chinese'
 batch_size = 2
 epoch_size = 500
-learning_rate = 5e-5
+learning_rate = 1e-5
 weight_decay = 0.01  # 最终目的是防止过拟合
 full_fine_tuning = True
 tokenizer = AutoTokenizer.from_pretrained(model_name, use_fast=True)
