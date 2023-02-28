@@ -40,7 +40,7 @@ model = BertForNerAppendBiLstmAndCrf.from_pretrained(pretrained_model_name_or_pa
 # 加载数据集
 nerdataset = Utils.convert_ner_data('data/origin/intercontest/relic_ner_handlewell.json')
 # nerdataset = list(filter(lambda x: ''.join(x[0]).startswith("小双桥遗址"), nerdataset))
-nerdataset=nerdataset[0:100]
+# nerdataset=nerdataset[0:100]
 train_data, dev_data = Data.random_split(nerdataset, [int(len(nerdataset) * 0.9),
                                                       len(nerdataset) - int(
                                                           len(nerdataset) * 0.9)])
@@ -227,7 +227,7 @@ def evaluate(model, eval_data_loader, epoch):
         else:
             model_config = model.config
         loss, outputs = model_output
-        print('prepredict:%s'%(str((outputs.shape))))
+
         predict = outputs.view(-1,outputs.shape[2])
 
         # 这里方便计算用，-100 torchmetrics无法使用
@@ -236,8 +236,6 @@ def evaluate(model, eval_data_loader, epoch):
         '''
         update 是计算当个batch的值  compute计算所有累加的值
         '''
-        print('predict:%s'%(str(predict.shape)))
-        print('labels:%s'%(str(labels.to(device).shape)))
         precision_score = model_precision(predict, labels.to(device))
         model_precision.update(predict, labels.to(device))
         recall_score = model_recall(predict, labels.to(device))
