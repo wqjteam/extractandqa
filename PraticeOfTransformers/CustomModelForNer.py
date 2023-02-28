@@ -43,6 +43,9 @@ class BertForNerAppendBiLstmAndCrf(BertPreTrainedModel):
         self.num_labels = config.num_labels
 
         self.bert = BertModel(config) #解决问题：NER标注数据少，文本信息抽取效果不佳
+
+        for param in self.bert.parameters():
+            param.requires_grad = False
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
         self.bilstm = nn.LSTM(  # 解决问题：抽取用于实体分类的包含上下文的文本信息
             input_size=config.hidden_size,  # 和bert encode的输出层 也即是隐藏层
