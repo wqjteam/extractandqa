@@ -228,7 +228,7 @@ def evaluate(model, eval_data_loader, epoch):
             model_config = model.config
         loss, outputs = model_output
         print('prepredict:%s'%(str((outputs.shape))))
-        predict = torch.squeeze(outputs,dim=0)
+        predict = outputs.view(-1,outputs.shape[2])
 
         # 这里方便计算用，-100 torchmetrics无法使用
         # predict[predict == -100] = len(ner_id_label)
