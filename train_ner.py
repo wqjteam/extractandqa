@@ -227,6 +227,7 @@ def evaluate(model, eval_data_loader, epoch):
         else:
             model_config = model.config
         loss, outputs = model_output
+        print('prepredict:%s'%(str((outputs.shape))))
         predict = torch.squeeze(outputs,dim=0)
 
         # 这里方便计算用，-100 torchmetrics无法使用
@@ -235,7 +236,8 @@ def evaluate(model, eval_data_loader, epoch):
         '''
         update 是计算当个batch的值  compute计算所有累加的值
         '''
-
+        print('predict:%s'%(str(predict.shape)))
+        print('labels:%s'%(str(labels.to(device).shape)))
         precision_score = model_precision(predict, labels.to(device))
         model_precision.update(predict, labels.to(device))
         recall_score = model_recall(predict, labels.to(device))
