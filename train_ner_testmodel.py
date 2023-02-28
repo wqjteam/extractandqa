@@ -73,14 +73,14 @@ if full_fine_tuning:
         {'params': [p for n, p in bert_optimizer if any(nd in n for nd in no_decay)],  # 对于在no_decay 不进行正则化
          'weight_decay': 0.0},
         {'params': [p for n, p in lstm_optimizer if not any(nd in n for nd in no_decay)],
-         'lr': learning_rate * 5 * 20, 'weight_decay': weight_decay},
+         'lr': learning_rate * 100, 'weight_decay': weight_decay},
         {'params': [p for n, p in lstm_optimizer if any(nd in n for nd in no_decay)],
-         'lr': learning_rate * 5 * 20, 'weight_decay': 0.0},
+         'lr': learning_rate * 100, 'weight_decay': 0.0},
         {'params': [p for n, p in classifier_optimizer if not any(nd in n for nd in no_decay)],
-         'lr': learning_rate * 5 * 20, 'weight_decay': weight_decay},
+         'lr': learning_rate * 100, 'weight_decay': weight_decay},
         {'params': [p for n, p in classifier_optimizer if any(nd in n for nd in no_decay)],
-         'lr': learning_rate * 5 * 20, 'weight_decay': 0.0},
-        {'params': model.crf.parameters(), 'lr': learning_rate * 5 * 200}
+         'lr': learning_rate * 100, 'weight_decay': 0.0},
+        {'params': model.crf.parameters(), 'lr': learning_rate * 1000}
     ]
     # only fine-tune the head classifier
 else:
@@ -285,7 +285,7 @@ for epoch in range(epoch_size):  # 所有数据迭代总的次数
 
         print('第%d个epoch的%d批数据的loss：%f' % (epoch + 1, step + 1, torch.mean(loss).detach().cpu()))
 
-        # scheduler.step()  # warm_up
+        scheduler.step()  # warm_up
         loss.backward(torch.ones_like(loss))  # 反向传播
         optim.step()  # 用来更新参数，也就是的w和b的参数更新操作
     viz.line(Y=[total_loss / total_step], X=[epoch + 1], win="pitcure_1", update='append')
