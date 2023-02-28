@@ -1,15 +1,10 @@
-import numpy as np
 import torch
-import torch.nn as nn
+import torch
 import torch.nn.functional as F
 import torchmetrics
-from torch import tensor
 from torch.nn import CrossEntropyLoss
-from transformers import AutoTokenizer, DataCollatorForLanguageModeling, DataCollatorForTokenClassification, \
-    DataCollatorForWholeWordMask, BertTokenizer
+from transformers import BertTokenizer, AutoTokenizer
 
-import CommonUtil
-from PraticeOfTransformers import Utils
 from PraticeOfTransformers.DataCollatorForWholeWordMaskOriginal import DataCollatorForWholeWordMaskOriginal
 
 pred = torch.tensor([[0.0,10.0,0.0],[0.0,0.0,10.0]])
@@ -37,20 +32,22 @@ out = func(pred, target)
 # print(find_all_index)
 
 model_name = 'bert-base-chinese'
-tokenizer = BertTokenizer.from_pretrained(model_name)
+tokenizer = AutoTokenizer.from_pretrained(model_name, use_fast=True)
 
-sentence="长治市博物馆，位于长治市太行西街。1990年9月动工兴建新馆，1992年10月落成，占地面积13340平方米，建筑面积8200km"
-spilltoken=tokenizer.tokenize(sentence)
-sentence="13340平方"
-encoded_dict = tokenizer.encode_plus(
-    text=sentence,
+list_tokens = ['']# spilltoken=tokenizer.tokenize(sentence)
+# sentence="13340平方"
+encoded_dict = tokenizer.batch_encode_plus(
+    batch_text_or_text_pairs=list_tokens,
     # 输入文本,采用list[tuple(question,text)]的方式进行输入 zip 把两个list压成tuple的list对
     add_special_tokens=True,  # 添加 '[CLS]' 和 '[SEP]'
     max_length=128,  # 填充 & 截断长度
     truncation=True,
     padding='longest',
     return_attention_mask=True,  # 返回 attn. masks.
+    is_split_into_words=True,
+return_offsets_mapping=True
 )
+encoded_dict.word_ids(batch_index=0)
 # lmtokener=DataCollatorForWholeWordMask(tokenizer=tokenizer,
 #                                                        mlm=True,
 #                                                        mlm_probability=0.15,

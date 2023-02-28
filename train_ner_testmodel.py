@@ -1,3 +1,4 @@
+import json
 import os
 import sys
 from functools import partial
@@ -12,14 +13,15 @@ from visdom import Visdom
 
 from PraticeOfTransformers import Utils
 from PraticeOfTransformers.CustomModelForNer import BertForNerAppendBiLstmAndCrf
-os.environ['CUDA_VISIBLE_DEVICES'] = '0,1' #指定GPU编号 多gpu训练
+
+os.environ['CUDA_VISIBLE_DEVICES'] = '0,1'  # 指定GPU编号 多gpu训练
 model_name = 'bert-base-chinese'
 batch_size = 2
 epoch_size = 500
 learning_rate = 5e-5
 weight_decay = 0.01  # 最终目的是防止过拟合
 full_fine_tuning = True
-tokenizer = AutoTokenizer.from_pretrained(model_name)
+tokenizer = AutoTokenizer.from_pretrained(model_name, use_fast=True)
 if len(sys.argv) >= 2:
     batch_size = int(sys.argv[1])
 if len(sys.argv) >= 3:
@@ -28,8 +30,9 @@ if len(sys.argv) >= 3:
 if len(sys.argv) >= 4:
     model_name = sys.argv[3]
 # CCKS2019_task1数据集，共1379条样本，6种类别，为解剖部位、手术、疾病和诊断、药物、实验室检验、影像检查。
-ner_id_label = {0: 'O', 1: 'B-ORG', 2: 'B-PER', 3: 'B-LOC', 4: 'B-TIME', 5: 'B-BOOK',
-                        6: 'I-ORG', 7: 'I-PER', 8: 'I-LOC', 9: 'I-TIME', 10: 'I-BOOK'}
+ner_id_label = {0: 'O', 1: 'B-解剖部位', 2: 'B-手术', 3: 'B-疾病和诊断', 4: 'B-药物', 5: 'B-实验室检验',
+                6: 'B-影像检查',
+                7: 'I-解剖部位', 8: 'I-手术', 9: 'I-疾病和诊断', 10: 'I-药物', 11: 'I-实验室检验', 12: 'I-影像检查'}
 ner_label_id = {}
 for key in ner_id_label:
     ner_label_id[ner_id_label[key]] = key
@@ -37,9 +40,12 @@ model = BertForNerAppendBiLstmAndCrf.from_pretrained(pretrained_model_name_or_pa
                                                      num_labels=len(ner_label_id))  # num_labels 测试用一下，看看参数是否传递
 
 # 加载数据集
-nerdataset = Utils.convert_ner_data('data/origin/intercontest/relic_ner_handlewell.json')
-# nerdataset = list(filter(lambda x: ''.join(x[0]).startswith("东汉玉蝉"), nerdataset))
-# nerdataset=nerdataset[0:10]
+# nerdataset = Utils.convert_ner_data('data/origin/intercontest/relic_ner_handlewell.json')
+nerdataset = []
+with open("data/origin/intercontest/ccks2019_task1.json", "r", encoding="utf-8") as fh:
+    for i, line in enumerate(fh):
+        sample = json.loads(line.strip())
+        nerdataset.append((sample['text'], sample['labels']))
 train_data, dev_data = Data.random_split(nerdataset, [int(len(nerdataset) * 0.9),
                                                       len(nerdataset) - int(
                                                           len(nerdataset) * 0.9)])
@@ -64,16 +70,16 @@ if full_fine_tuning:
     optimizer_grouped_parameters = [
         {'params': [p for n, p in bert_optimizer if not any(nd in n for nd in no_decay)],
          'weight_decay': weight_decay},
-        {'params': [p for n, p in bert_optimizer if any(nd in n for nd in no_decay)], #对于在no_decay 不进行正则化
+        {'params': [p for n, p in bert_optimizer if any(nd in n for nd in no_decay)],  # 对于在no_decay 不进行正则化
          'weight_decay': 0.0},
         {'params': [p for n, p in lstm_optimizer if not any(nd in n for nd in no_decay)],
-         'lr': learning_rate * 5 *20, 'weight_decay': weight_decay},
+         'lr': learning_rate * 5 * 20, 'weight_decay': weight_decay},
         {'params': [p for n, p in lstm_optimizer if any(nd in n for nd in no_decay)],
-         'lr': learning_rate * 5 *20, 'weight_decay': 0.0},
+         'lr': learning_rate * 5 * 20, 'weight_decay': 0.0},
         {'params': [p for n, p in classifier_optimizer if not any(nd in n for nd in no_decay)],
-         'lr': learning_rate * 5 *20, 'weight_decay': weight_decay},
+         'lr': learning_rate * 5 * 20, 'weight_decay': weight_decay},
         {'params': [p for n, p in classifier_optimizer if any(nd in n for nd in no_decay)],
-         'lr': learning_rate * 5 *20, 'weight_decay': 0.0},
+         'lr': learning_rate * 5 * 20, 'weight_decay': 0.0},
         {'params': model.crf.parameters(), 'lr': learning_rate * 5 * 200}
     ]
     # only fine-tune the head classifier
@@ -107,7 +113,11 @@ word_ids将每一个subtokens位置都对应了一个word的下标。
 def tokenize_and_align_labels(examples, tokenizer):
     tokens, takens_labels = zip(*examples)
     # tokens, takens_labels = examples
-    tokenized_inputs = tokenizer(tokens, add_special_tokens=False, truncation=True, is_split_into_words=True)
+    list_tokens = [ list(str) for str  in tokens]
+
+    tokenized_inputs = tokenizer.batch_encode_plus(batch_text_or_text_pairs=list_tokens, add_special_tokens=False,
+                                                   is_split_into_words=True,max_length=512,
+                                                   truncation=True)
 
     labels = []
     for i, label in enumerate(takens_labels):
@@ -179,18 +189,21 @@ dev_dataloader = Data.DataLoader(
 )
 
 # 实例化相关metrics的计算对象   len(ner_id_label)+1是为了ignore_index用 他不允许为负数值 这里忽略了，所以不影响结果
-model_recall = torchmetrics.Recall(average='macro', num_classes=len(ner_id_label)+1,mdmc_average ='samplewise',ignore_index=len(ner_id_label)).to(device)
-model_precision = torchmetrics.Precision(average='macro', num_classes=len(ner_id_label)+1,mdmc_average ='samplewise',ignore_index=len(ner_id_label)).to(device)
-model_f1 = torchmetrics.F1Score(average="macro", num_classes=len(ner_id_label)+1,mdmc_average ='samplewise',ignore_index=len(ner_id_label)).to(device)
+model_recall = torchmetrics.Recall(average='macro', num_classes=len(ner_id_label) + 1, mdmc_average='samplewise',
+                                   ignore_index=len(ner_id_label)).to(device)
+model_precision = torchmetrics.Precision(average='macro', num_classes=len(ner_id_label) + 1, mdmc_average='samplewise',
+                                         ignore_index=len(ner_id_label)).to(device)
+model_f1 = torchmetrics.F1Score(average="macro", num_classes=len(ner_id_label) + 1, mdmc_average='samplewise',
+                                ignore_index=len(ner_id_label)).to(device)
 
-viz = Visdom(env=u'ner_%s_train' % (model_name))
+viz = Visdom(env=u'ner_test_yiliaoshuju_train')
 name = ['total_loss']
 name_precision_recall_f1 = ['precision_score', 'recall_score', 'f1_score']
 viz.line(Y=[(0.)], X=[(0.)], win="pitcure_1",
          opts=dict(title='train_loss', legend=name, xlabel='epoch', ylabel='loss', markers=False))  # 绘制起始位置 #win指的是图形id
 viz.line(Y=[(0.)], X=[(0.)], win="pitcure_2",
          opts=dict(title='eval_loss', legend=name, xlabel='epoch', ylabel='loss', markers=False))  # 绘制起始位置
-viz.line(Y=[(0., 0.,0.)], X=[(0., 0.,0.)], win="pitcure_3",
+viz.line(Y=[(0., 0., 0.)], X=[(0., 0., 0.)], win="pitcure_3",
          opts=dict(title='eval_precision_recall_f1', legend=name_precision_recall_f1, xlabel='epoch', ylabel='score',
                    markers=False))  # 绘制起始位置
 
@@ -216,9 +229,9 @@ def evaluate(model, eval_data_loader, epoch):
         loss, outputs = model_output
         predict = torch.argmax(outputs, dim=2)
 
-        #这里方便计算用，-100 torchmetrics无法使用
-        predict[predict==-100]=len(ner_id_label)
-        labels[labels==-100]=len(ner_id_label)
+        # 这里方便计算用，-100 torchmetrics无法使用
+        predict[predict == -100] = len(ner_id_label)
+        labels[labels == -100] = len(ner_id_label)
         '''
         update 是计算当个batch的值  compute计算所有累加的值
         '''
@@ -236,7 +249,7 @@ def evaluate(model, eval_data_loader, epoch):
         # 进行统计展示
         eval_step += 1
 
-        eval_total_loss +=  torch.mean(loss).detach().cpu()
+        eval_total_loss += torch.mean(loss).detach().cpu()
 
         print('--eval---eopch: %d --precision得分: %.6f--recall得分: %.6f--- f1得分: %.6f- 损失函数: %.6f' % (
             epoch, precision_score, recall_score, f1_score, torch.mean(loss).detach().cpu()))
@@ -272,8 +285,7 @@ for epoch in range(epoch_size):  # 所有数据迭代总的次数
 
         print('第%d个epoch的%d批数据的loss：%f' % (epoch + 1, step + 1, torch.mean(loss).detach().cpu()))
 
-
-        #scheduler.step()  # warm_up
+        # scheduler.step()  # warm_up
         loss.backward(torch.ones_like(loss))  # 反向传播
         optim.step()  # 用来更新参数，也就是的w和b的参数更新操作
     viz.line(Y=[total_loss / total_step], X=[epoch + 1], win="pitcure_1", update='append')
