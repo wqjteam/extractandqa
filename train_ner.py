@@ -90,12 +90,16 @@ if full_fine_tuning:
 else:
     param_optimizer = list(model.classifier.named_parameters())
     optimizer_grouped_parameters = [{'params': [p for n, p in param_optimizer]}]
+
 optimizer = AdamW(optimizer_grouped_parameters, lr=learning_rate)
+
 train_steps_per_epoch = len(train_data) // batch_size
+
 scheduler = get_cosine_schedule_with_warmup(optimizer,
-                                            num_warmup_steps=(epoch_size // 10) * train_steps_per_epoch,
+                                            # warm_up_ratio = 0.1
+                                            num_warmup_steps=epoch_size * train_steps_per_epoch // 10,
                                             num_training_steps=epoch_size * train_steps_per_epoch)
-optim = AdamW(model.parameters(), lr=learning_rate)  # 需要填写模型的参数
+# optim = AdamW(model.parameters(), lr=learning_rate)  # 需要填写模型的参数
 
 print(model)
 
