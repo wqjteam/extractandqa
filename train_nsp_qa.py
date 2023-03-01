@@ -24,7 +24,7 @@ import sys
 model_name = 'bert-base-chinese'
 tokenizer = AutoTokenizer.from_pretrained(model_name)
 
-os.environ['CUDA_VISIBLE_DEVICES'] = '0,1' #指定GPU编号 多gpu训练
+os.environ['CUDA_VISIBLE_DEVICES'] = '0,1'  # 指定GPU编号 多gpu训练
 batch_size = 2
 epoch_size = 1000
 
@@ -47,22 +47,16 @@ keyword_flag = False
 if len(sys.argv) >= 5 and sys.argv[4] == 'True':
     keyword_flag = True
 
-
-
-
-
-#获取模型路径
+# 获取模型路径
 if len(sys.argv) >= 6:
 
     config = AutoConfig.from_pretrained(model_name, num_labels=2)
     model = BertForUnionNspAndQA(config)
-    #因为后面的参数没有初始化，所以采用非强制性约束
-    model.load_state_dict( torch.load(sys.argv[5]),strict=False)
+    # 因为后面的参数没有初始化，所以采用非强制性约束
+    model.load_state_dict(torch.load(sys.argv[5]), strict=False)
 else:
     ##完全继承
     model = BertForUnionNspAndQA.from_pretrained(model_name, num_labels=2)  # num_labels 测试用一下，看看参数是否传递
-
-
 
 # 用于梯度回归
 optim = Adam(model.parameters(), lr=5e-5)  # 需要填写模型的参数
@@ -79,16 +73,13 @@ passage_keyword_json = passage_keyword_json[passage_keyword_json['q_a'].apply(la
 
 passage_keyword_json = passage_keyword_json.explode("q_a").values
 
-
-
 sent = ['我爱北京天安门，天安门上太阳升', '我爱北京中南海，毛主席在中南还', '改革开放好，我哎深圳，深圳是改革开放先驱']
 question = ['我爱什么?', '毛主席在哪?', '谁是改革开放先驱']
 
 train_data, dev_data = Data.random_split(passage_keyword_json, [int(len(passage_keyword_json) * 0.9),
                                                                 len(passage_keyword_json) - int(
-                                                                 len(passage_keyword_json) * 0.9)])
-
-
+                                                                    len(passage_keyword_json) * 0.9)],
+                                         generator=torch.Generator().manual_seed(0))
 
 # 创建一个实例，参数是tokenizer，如果不是batch的化，就采用tokenizer.encode_plus
 encoded_dict = tokenizer.batch_encode_plus(
@@ -176,7 +167,8 @@ def create_batch(data, tokenizer, data_collator, keyword_flag=False):
         data_collator_output = data_collator(zip(base_input_ids, encoded_dict_keywords['input_ids']))
         mask_input_ids = data_collator_output["input_ids"]
 
-        mask_input_labels = data_collator_output["labels"]  # 需要获取不是-100的位置，证明其未被替换，这也是target -100的位置在计算crossentropyloss 会丢弃
+        mask_input_labels = data_collator_output[
+            "labels"]  # 需要获取不是-100的位置，证明其未被替换，这也是target -100的位置在计算crossentropyloss 会丢弃
         '''
          进行遍历,获取原来的未被mask的数据,再对此进行对齐,方便后续会对此进行计算loss 在计算loss的时候 根据CrossEntropyLoss 的ingore_index 会根据target的属性，
          直接去出某些值.不进行计算，所以不需要再进行转换
@@ -228,9 +220,8 @@ train_dataloader = Data.DataLoader(
 )
 
 dev_dataloader = Data.DataLoader(
-    dev_data, shuffle=True, collate_fn=create_batch_partial, batch_size=batch_size
+    dev_data, shuffle=False, collate_fn=create_batch_partial, batch_size=batch_size
 )
-
 
 # 看是否用cpu或者gpu训练
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -239,13 +230,13 @@ print("-----------------------------------训练模式为%s---------------------
 if torch.cuda.device_count() > 1:
     device_ids = list(range(torch.cuda.device_count()))
 
-    model = nn.DataParallel(model,device_ids=device_ids)
+    model = nn.DataParallel(model, device_ids=device_ids)
 
 model.to(device)
 '''
 可视化
 '''
-viz = Visdom(env=u'qa_%s_train'%model_name)
+viz = Visdom(env=u'qa_%s_train' % model_name)
 name = ['mlm_loss', 'nsp_loss', 'qa_loss', 'total_loss']
 name_em_f1 = ['em_score', 'f1_score']
 viz.line(Y=[(0., 0., 0., 0.)], X=[(0., 0., 0., 0.)], win="pitcure_1",
@@ -255,7 +246,6 @@ viz.line(Y=[(0., 0., 0., 0.)], X=[(0., 0., 0., 0.)], win="pitcure_2",
 viz.line(Y=[(0., 0.)], X=[(0., 0.)], win="pitcure_3",
          opts=dict(title='eval_em_f1', legend=name_em_f1, xlabel='epoch', ylabel='score(100分制)',
                    markers=False))  # 绘制起始位置
-
 
 
 #  评估函数，用作训练一轮，评估一轮使用
@@ -275,7 +265,7 @@ def evaluate(model, eval_data_loader, epoch, tokenizer):
 
         # 进行转换
         if torch.cuda.is_available() and torch.cuda.device_count() > 1:
-            model_config=model.module.config
+            model_config = model.module.config
         else:
             model_config = model.config
         mlm_prediction_scores = model_output.mlm_prediction_scores.to("cpu")
@@ -291,7 +281,8 @@ def evaluate(model, eval_data_loader, epoch, tokenizer):
         '''
         mlm loss 计算
         '''
-        mlm_loss = loss_fct(input=mlm_prediction_scores.view(-1, model_config.vocab_size), target=mask_input_labels.view(-1))
+        mlm_loss = loss_fct(input=mlm_prediction_scores.view(-1, model_config.vocab_size),
+                            target=mask_input_labels.view(-1))
         if not keyword_flag:
             mlm_loss = torch.tensor(0)
 
@@ -299,7 +290,6 @@ def evaluate(model, eval_data_loader, epoch, tokenizer):
         nsp loss 计算
         '''
         nsp_loss = loss_fct(nsp_relationship_scores.view(-1, 2), nsp_labels.view(-1))
-
 
         '''
         qa loss 计算
@@ -309,7 +299,7 @@ def evaluate(model, eval_data_loader, epoch, tokenizer):
         qa_loss = (start_loss + end_loss) / 2
 
         total_loss = mlm_loss + torch.sqrt(torch.exp(nsp_loss)) * qa_loss  # 目的是为了当nsp预测错了的时候 加大惩罚程度
-        #total_loss = torch.sqrt(torch.exp(nsp_loss)) * qa_loss  # 目的是为了当nsp预测错了的时候 加大惩罚程度
+        # total_loss = torch.sqrt(torch.exp(nsp_loss)) * qa_loss  # 目的是为了当nsp预测错了的时候 加大惩罚程度
 
         '''
         实际预测值与目标值的
@@ -325,7 +315,7 @@ def evaluate(model, eval_data_loader, epoch, tokenizer):
         f1_score = qa_metric['F1']
 
         print('--eval---epoch次数:%d---em得分: %.6f - f1得分: %.6f--nsp损失函数: %.6f--qa损失函数: %.6f- total损失函数: %.6f'
-              %(epoch ,em_score, f1_score, nsp_loss,qa_loss,total_loss.detach()))
+              % (epoch, em_score, f1_score, nsp_loss, qa_loss, total_loss.detach()))
         # 损失函数的平均值
         # 按照概率最大原则，计算单字的标签编号
         # argmax计算logits中最大元素值的索引，从0开始
@@ -343,9 +333,6 @@ def evaluate(model, eval_data_loader, epoch, tokenizer):
         X=[(epoch + 1, epoch + 1, epoch + 1, epoch + 1)], win="pitcure_2", update='append')
     viz.line(Y=[(eval_em_score / eval_step, eval_f1_score / eval_step)],
              X=[(epoch + 1, epoch + 1)], win="pitcure_3", update='append')
-
-
-
 
 
 # 进行训练
@@ -393,7 +380,7 @@ for epoch in range(epoch_size):  # 所有数据迭代总的次数
         qa_loss = (start_loss + end_loss) / 2
 
         total_loss = mlm_loss + torch.sqrt(torch.exp(nsp_loss)) * qa_loss  # 目的是为了当nsp预测错了的时候 加大惩罚程度
-        #total_loss = torch.sqrt(torch.exp(nsp_loss)) * qa_loss  # 目的是为了当nsp预测错了的时候 加大惩罚程度
+        # total_loss = torch.sqrt(torch.exp(nsp_loss)) * qa_loss  # 目的是为了当nsp预测错了的时候 加大惩罚程度
 
         # 进行统计展示
         epoch_step += 1
