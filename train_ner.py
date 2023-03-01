@@ -68,14 +68,14 @@ if full_fine_tuning:
         {'params': [p for n, p in bert_optimizer if any(nd in n for nd in no_decay)],  # 对于在no_decay 不进行正则化
          'weight_decay': 0.0},
         {'params': [p for n, p in lstm_optimizer if not any(nd in n for nd in no_decay)],
-         'lr': learning_rate * 100, 'weight_decay': weight_decay},
+         'lr': learning_rate * 10, 'weight_decay': weight_decay},
         {'params': [p for n, p in lstm_optimizer if any(nd in n for nd in no_decay)],
-         'lr': learning_rate * 100, 'weight_decay': 0.0},
+         'lr': learning_rate * 10, 'weight_decay': 0.0},
         {'params': [p for n, p in classifier_optimizer if not any(nd in n for nd in no_decay)],
-         'lr': learning_rate * 100, 'weight_decay': weight_decay},
+         'lr': learning_rate * 10, 'weight_decay': weight_decay},
         {'params': [p for n, p in classifier_optimizer if any(nd in n for nd in no_decay)],
-         'lr': learning_rate * 100, 'weight_decay': 0.0},
-        {'params': model.crf.parameters(), 'lr': learning_rate * 1000}
+         'lr': learning_rate * 10, 'weight_decay': 0.0},
+        {'params': model.crf.parameters(), 'lr': learning_rate * 10}
     ]
     # only fine-tune the head classifier
 else:
