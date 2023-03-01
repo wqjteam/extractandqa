@@ -75,7 +75,7 @@ if full_fine_tuning:
          'lr': learning_rate * 100, 'weight_decay': weight_decay},
         {'params': [p for n, p in classifier_optimizer if any(nd in n for nd in no_decay)],
          'lr': learning_rate * 100, 'weight_decay': 0.0},
-        {'params': model.crf.parameters(), 'lr': learning_rate * 100}
+        {'params': model.crf.parameters(), 'lr': learning_rate * 1000}
     ]
     # only fine-tune the head classifier
 else:

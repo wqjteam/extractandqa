@@ -32,7 +32,7 @@ if len(sys.argv) >= 4:
 # CCKS2019_task1数据集，共1379条样本，6种类别，为解剖部位、手术、疾病和诊断、药物、实验室检验、影像检查。
 ner_id_label = {0: 'O', 1: 'B-解剖部位', 2: 'B-手术', 3: 'B-疾病和诊断', 4: 'B-药物', 5: 'B-实验室检验',
                 6: 'B-影像检查',
-                7: 'I-解剖部位', 8: 'I-手术', 9: 'I-疾病和诊断', 10: 'I-药物', 11: 'I-实验室检验', 12: 'I-影像检查'}
+                7: 'I-解剖部位', 8: 'I-手术', 9: 'I-疾病和诊断', 10: 'I-药物', 11: 'I-实验室检验', 12: 'I-影像检查',13:'[CLS]',14:'[SEP]'}
 ner_label_id = {}
 for key in ner_id_label:
     ner_label_id[ner_id_label[key]] = key
@@ -115,7 +115,7 @@ def tokenize_and_align_labels(examples, tokenizer):
     # tokens, takens_labels = examples
     list_tokens = [ list(str) for str  in tokens]
 
-    tokenized_inputs = tokenizer.batch_encode_plus(batch_text_or_text_pairs=list_tokens, add_special_tokens=False,
+    tokenized_inputs = tokenizer.batch_encode_plus(batch_text_or_text_pairs=list_tokens, add_special_tokens=True,
                                                    is_split_into_words=True,max_length=512,
                                                    truncation=True)
 
@@ -127,10 +127,18 @@ def tokenize_and_align_labels(examples, tokenizer):
         label_ids = []
 
         # 遍历subtokens位置索引
-        for word_idx in word_ids:
+        for word_index,word_idx in enumerate(word_ids):
+            #处理特殊字符  We set the label for the first toke
             if word_idx is None:
-                # 将特殊字符的label设置为-100
-                label_ids.append(-100)
+
+                if word_index==0:
+                    label_ids.append(ner_label_id['[CLS]'])
+                elif word_index==len(word_ids)-1:
+                    label_ids.append(ner_label_id['[SEP]'])
+                else:
+                    # 将特殊字符的label设置为-100,不会出现 pad的，但还是设置下
+                    label_ids.append(-100)
+
             # We set the label for the first token of each word.
             elif word_idx != previous_word_idx:
                 label_ids.append(ner_label_id[label[word_idx]])
@@ -189,27 +197,33 @@ dev_dataloader = Data.DataLoader(
 )
 
 # 实例化相关metrics的计算对象   len(ner_id_label)+1是为了ignore_index用 他不允许为负数值 这里忽略了，所以不影响结果
-model_recall = torchmetrics.Recall(average='macro', num_classes=len(ner_id_label) + 1, mdmc_average='samplewise',
+model_recall = torchmetrics.Recall(average='micro', num_classes=len(ner_id_label) + 1, mdmc_average='samplewise',
                                    ignore_index=len(ner_id_label)).to(device)
-model_precision = torchmetrics.Precision(average='macro', num_classes=len(ner_id_label) + 1, mdmc_average='samplewise',
+model_accurate = torchmetrics.Accuracy(average='micro', num_classes=len(ner_id_label) + 1, mdmc_average='samplewise',
+                                   ignore_index=len(ner_id_label)).to(device)
+model_precision = torchmetrics.Precision(average='micro', num_classes=len(ner_id_label) + 1, mdmc_average='samplewise',
                                          ignore_index=len(ner_id_label)).to(device)
-model_f1 = torchmetrics.F1Score(average="macro", num_classes=len(ner_id_label) + 1, mdmc_average='samplewise',
+model_f1 = torchmetrics.F1Score(average="micro", num_classes=len(ner_id_label) + 1, mdmc_average='samplewise',
                                 ignore_index=len(ner_id_label)).to(device)
 
 viz = Visdom(env=u'ner_test_yiliaoshuju_train')
 name = ['total_loss']
-name_precision_recall_f1 = ['precision_score', 'recall_score', 'f1_score']
+name_precision_recall_f1 = ['accurate_score','precision_score', 'recall_score', 'f1_score']
 viz.line(Y=[(0.)], X=[(0.)], win="pitcure_1",
          opts=dict(title='train_loss', legend=name, xlabel='epoch', ylabel='loss', markers=False))  # 绘制起始位置 #win指的是图形id
 viz.line(Y=[(0.)], X=[(0.)], win="pitcure_2",
          opts=dict(title='eval_loss', legend=name, xlabel='epoch', ylabel='loss', markers=False))  # 绘制起始位置
-viz.line(Y=[(0., 0., 0.)], X=[(0., 0., 0.)], win="pitcure_3",
-         opts=dict(title='eval_precision_recall_f1', legend=name_precision_recall_f1, xlabel='epoch', ylabel='score',
+viz.line(Y=[(0., 0., 0., 0.)], X=[(0., 0., 0., 0.)], win="pitcure_3",
+         opts=dict(title='eval_accurate_precision_recall_f1', legend=name_precision_recall_f1, xlabel='epoch', ylabel='score',
                    markers=False))  # 绘制起始位置
 
 
 #  评估函数，用作训练一轮，评估一轮使用
 def evaluate(model, eval_data_loader, epoch):
+    model_recall.reset()
+    model_accurate.reset()
+    model_precision.reset()
+    model_f1.reset()
     # 评估之前将其重置
     eval_total_loss = 0
     eval_step = 0
@@ -235,7 +249,8 @@ def evaluate(model, eval_data_loader, epoch):
         '''
         update 是计算当个batch的值  compute计算所有累加的值
         '''
-
+        accurate_score = model_accurate(predict, labels.to(device))
+        model_accurate.update(predict, labels.to(device))
         precision_score = model_precision(predict, labels.to(device))
         model_precision.update(predict, labels.to(device))
         recall_score = model_recall(predict, labels.to(device))
@@ -251,11 +266,11 @@ def evaluate(model, eval_data_loader, epoch):
 
         eval_total_loss += torch.mean(loss).detach().cpu()
 
-        print('--eval---eopch: %d --precision得分: %.6f--recall得分: %.6f--- f1得分: %.6f- 损失函数: %.6f' % (
-            epoch, precision_score, recall_score, f1_score, torch.mean(loss).detach().cpu()))
+        print('--eval---eopch: %d --accurate得分: %.6f ---precision得分: %.6f---recall得分: %.6f--- f1得分: %.6f- 损失函数: %.6f' % (
+            epoch,accurate_score, precision_score, recall_score, f1_score, torch.mean(loss).detach().cpu()))
     viz.line(Y=[eval_total_loss / eval_step], X=[epoch + 1], win="pitcure_2", update='append')
-    viz.line(Y=[(model_precision.compute().to('cpu'), model_recall.compute().to('cpu'), model_f1.compute().to('cpu'))],
-             X=[(epoch + 1, epoch + 1, epoch + 1)], win="pitcure_3", update='append')
+    viz.line(Y=[(model_accurate.compute().to('cpu'),model_precision.compute().to('cpu'), model_recall.compute().to('cpu'), model_f1.compute().to('cpu'))],
+             X=[(epoch + 1, epoch + 1, epoch + 1, epoch + 1)], win="pitcure_3", update='append')
     model_precision.reset()
     model_recall.reset()
     model_f1.reset()
@@ -289,7 +304,7 @@ for epoch in range(epoch_size):  # 所有数据迭代总的次数
         optim.step()  # 用来更新参数，也就是的w和b的参数更新操作
         scheduler.step()  # warm_up
     viz.line(Y=[total_loss / total_step], X=[epoch + 1], win="pitcure_1", update='append')
-    evaluate(model, dev_dataloader, epoch)
+    evaluate(model, dev_dataloader, epoch+1)
     # 每5个epoch保存一次
     if (epoch + 1) % 5 == 0:
         torch.save(model.state_dict(), 'save_model/ner/ner_epoch_%d' % (epoch + 1))
