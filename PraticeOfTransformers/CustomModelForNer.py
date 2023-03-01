@@ -61,9 +61,7 @@ class BertForNerAppendBiLstmAndCrf(BertPreTrainedModel):
     def forward(self, input_ids, token_type_ids=None, attention_mask=None, labels=None,
                 position_ids=None, inputs_embeds=None, head_mask=None,is_test=False):
 
-        outputs = self.bert(input_ids=input_ids
-                            # )
-                            ,
+        outputs = self.bert(input_ids=input_ids,
                             attention_mask=attention_mask,
                             token_type_ids=token_type_ids,
                             position_ids=position_ids,
