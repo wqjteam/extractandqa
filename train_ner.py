@@ -41,13 +41,9 @@ model = BertForNerAppendBiLstmAndCrf.from_pretrained(pretrained_model_name_or_pa
 if len(sys.argv) >= 4:
     config = AutoConfig.from_pretrained(pretrained_model_name_or_path=model_name, num_labels=len(ner_label_id))
     model = BertForNerAppendBiLstmAndCrf(config)
-    #因为后面的参数没有初始化，所以采用非强制性约束
-    model.load_state_dict( torch.load(sys.argv[3]),strict=False)
+    # 因为后面的参数没有初始化，所以采用非强制性约束
+    model.load_state_dict(torch.load(sys.argv[3]), strict=False)
     model_name = "special-keyword-bert-chinese"
-
-
-
-
 
 # 加载数据集
 nerdataset = Utils.convert_ner_data('data/origin/intercontest/relic_ner_handlewell.json')
@@ -55,7 +51,8 @@ nerdataset = Utils.convert_ner_data('data/origin/intercontest/relic_ner_handlewe
 # nerdataset=nerdataset[0:100]
 train_data, dev_data = Data.random_split(nerdataset, [int(len(nerdataset) * 0.9),
                                                       len(nerdataset) - int(
-                                                          len(nerdataset) * 0.9)])
+                                                          len(nerdataset) * 0.9)],
+                                         generator=torch.Generator().manual_seed(0))
 
 '''
 非bert层的学习率需要提高 crf需要为bert的
@@ -197,7 +194,7 @@ train_dataloader = Data.DataLoader(
 )
 
 dev_dataloader = Data.DataLoader(
-    dev_data, shuffle=True, collate_fn=create_batch_partial, batch_size=batch_size
+    dev_data, shuffle=False, collate_fn=create_batch_partial, batch_size=batch_size
 )
 
 # 实例化相关metrics的计算对象   len(ner_id_label)+1是为了ignore_index用 他不允许为负数值 这里忽略了，所以不影响结果
