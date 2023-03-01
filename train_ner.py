@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import os
 import sys
 from functools import partial
@@ -7,13 +8,15 @@ import torch.utils.data as Data
 import torchmetrics
 from torch import nn
 from torch.optim import AdamW
-from transformers import AutoTokenizer, DataCollatorForTokenClassification, get_cosine_schedule_with_warmup
+from transformers import AutoTokenizer, DataCollatorForTokenClassification, get_cosine_schedule_with_warmup, AutoConfig
 from visdom import Visdom
 
 from PraticeOfTransformers import Utils
 from PraticeOfTransformers.CustomModelForNer import BertForNerAppendBiLstmAndCrf
 
 os.environ['CUDA_VISIBLE_DEVICES'] = '0,1'  # 指定GPU编号 多gpu训练
+print('--------------------sys.argv:%s-------------------' % (','.join(sys.argv)))
+
 model_name = 'bert-base-chinese'
 batch_size = 2
 epoch_size = 500
@@ -25,17 +28,26 @@ if len(sys.argv) >= 2:
     batch_size = int(sys.argv[1])
 if len(sys.argv) >= 3:
     epoch_size = int(sys.argv[2])
-# 获取模型路径
-if len(sys.argv) >= 4:
-    model_name = sys.argv[3]
 
-ner_id_label = {0:'[CLS]',1:'[SEP]',2: 'O', 3: 'B-ORG', 4: 'B-PER', 5: 'B-LOC', 6: 'B-TIME', 7: 'B-BOOK',
+ner_id_label = {0: '[CLS]', 1: '[SEP]', 2: 'O', 3: 'B-ORG', 4: 'B-PER', 5: 'B-LOC', 6: 'B-TIME', 7: 'B-BOOK',
                 8: 'I-ORG', 9: 'I-PER', 10: 'I-LOC', 11: 'I-TIME', 12: 'I-BOOK'}
 ner_label_id = {}
 for key in ner_id_label:
     ner_label_id[ner_id_label[key]] = key
+
 model = BertForNerAppendBiLstmAndCrf.from_pretrained(pretrained_model_name_or_path=model_name,
                                                      num_labels=len(ner_label_id))  # num_labels 测试用一下，看看参数是否传递
+# 获取模型路径
+if len(sys.argv) >= 4:
+    config = AutoConfig.from_pretrained(pretrained_model_name_or_path=model_name, num_labels=len(ner_label_id))
+    model = BertForNerAppendBiLstmAndCrf(config)
+    #因为后面的参数没有初始化，所以采用非强制性约束
+    model.load_state_dict( torch.load(sys.argv[3]),strict=False)
+    model_name = "special-keyword-bert-chinese"
+
+
+
+
 
 # 加载数据集
 nerdataset = Utils.convert_ner_data('data/origin/intercontest/relic_ner_handlewell.json')
@@ -120,13 +132,13 @@ def tokenize_and_align_labels(examples, tokenizer):
         label_ids = []
 
         # 遍历subtokens位置索引
-        for word_index,word_idx in enumerate(word_ids):
-            #处理特殊字符
+        for word_index, word_idx in enumerate(word_ids):
+            # 处理特殊字符
             if word_idx is None:
 
-                if word_index==0:
+                if word_index == 0:
                     label_ids.append(ner_label_id['[CLS]'])
-                elif word_index==len(word_ids)-1:
+                elif word_index == len(word_ids) - 1:
                     label_ids.append(ner_label_id['[SEP]'])
                 else:
                     # 将特殊字符的label设置为-100,不会出现 pad的，但还是设置下
@@ -189,7 +201,7 @@ dev_dataloader = Data.DataLoader(
 )
 
 # 实例化相关metrics的计算对象   len(ner_id_label)+1是为了ignore_index用 他不允许为负数值 这里忽略了，所以不影响结果
-model_recall = torchmetrics.Recall( num_classes=len(ner_id_label) + 1, mdmc_average='global',
+model_recall = torchmetrics.Recall(num_classes=len(ner_id_label) + 1, mdmc_average='global',
                                    ignore_index=len(ner_id_label)).to(device)
 model_precision = torchmetrics.Precision(num_classes=len(ner_id_label) + 1, mdmc_average='global',
                                          ignore_index=len(ner_id_label)).to(device)
@@ -221,18 +233,19 @@ def evaluate(model, eval_data_loader, epoch):
         attention_masks = return_batch_data['attention_mask']
         labels = return_batch_data['labels']
 
-        model_output = model(input_ids.to(device), token_type_ids=token_type_ids.to(device), labels=labels.to(device),is_test=True)
+        model_output = model(input_ids.to(device), token_type_ids=token_type_ids.to(device), labels=labels.to(device),
+                             is_test=True)
         if torch.cuda.is_available() and torch.cuda.device_count() > 1:
             model_config = model.module.config
         else:
             model_config = model.config
         loss, outputs = model_output
 
-        predict = outputs.view(-1,outputs.shape[2])
+        predict = outputs.view(-1, outputs.shape[2])
 
         # 这里方便计算用，-100 torchmetrics无法使用
         # predict[predict == -100] = len(ner_id_label)
-        labels[labels == -100] = len(ner_id_label) # predict 或者 labels 只要出现ignore_index 则不会统计在内
+        labels[labels == -100] = len(ner_id_label)  # predict 或者 labels 只要出现ignore_index 则不会统计在内
         '''
         update 是计算当个batch的值  compute计算所有累加的值
         '''
