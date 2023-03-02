@@ -136,11 +136,11 @@ dev_dataloader = Data.DataLoader(
 )
 
 # 实例化相关metrics的计算对象   len(ner_id_label)+1是为了ignore_index用 他不允许为负数值 这里忽略了，所以不影响结果
-model_recall = torchmetrics.Recall(num_classes=model.config.vocab_size + 1, mdmc_average='global',
+model_recall = torchmetrics.Recall(num_classes=model.config.vocab_size + 1, mdmc_average='samplewise',
                                    ignore_index=model.config.vocab_size)
-model_precision = torchmetrics.Precision(num_classes=model.config.vocab_size + 1, mdmc_average='global',
+model_precision = torchmetrics.Precision(num_classes=model.config.vocab_size + 1, mdmc_average='samplewise',
                                          ignore_index=model.config.vocab_size)
-model_f1 = torchmetrics.F1Score(num_classes=model.config.vocab_size + 1, mdmc_average='global',
+model_f1 = torchmetrics.F1Score(num_classes=model.config.vocab_size + 1, mdmc_average='samplewise',
                                 ignore_index=model.config.vocab_size)
 
 # 看是否用cpu或者gpu训练
