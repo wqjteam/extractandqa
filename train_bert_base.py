@@ -179,8 +179,9 @@ def evaluate(model, eval_data_loader, epoch):
     for return_batch_data in eval_data_loader:  # 一个batch一个bach的训练完所有数据
         mask_input_ids, attention_masks, token_type_ids, mask_input_labels, nsp_labels = return_batch_data
 
-        model_output = model(input_ids=mask_input_ids.to(device), attention_mask=attention_masks.to(device),
-                             token_type_ids=token_type_ids.to(device))
+        with torch.no_grad():
+            model_output = model(input_ids=mask_input_ids.to(device), attention_mask=attention_masks.to(device),
+                                 token_type_ids=token_type_ids.to(device))
         if torch.cuda.is_available() and torch.cuda.device_count() > 1:
             model_config = model.module.config
         else:
