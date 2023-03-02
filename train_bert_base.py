@@ -57,7 +57,8 @@ virtualrelic_setence = []
 virtualrelic_keyword = []
 for row in passage_keyword_json_virtualrelic_file.readlines():
     tmp_list = row.split(':')  # 按‘:'切分每行的数据
-    virtualrelic_setence.append(row)
+    maxlen=510 if len(row)>510 else len(row)
+    virtualrelic_setence.append(row[0:maxlen])
     virtualrelic_keyword.append([tmp_list[0]])
 virtualrelic_setence_keyword = np.concatenate(
     (np.array(virtualrelic_setence).reshape(-1, 1), np.array(virtualrelic_keyword, dtype=list).reshape(-1, 1)), axis=1)
