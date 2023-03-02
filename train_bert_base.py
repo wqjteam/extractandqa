@@ -206,12 +206,12 @@ def evaluate(model, eval_data_loader, epoch):
         '''
         update 是计算当个batch的值  compute计算所有累加的值
         '''
-        precision_score = model_precision(predict, mask_input_labels)
-        model_precision.update(predict, mask_input_labels)
-        recall_score = model_recall(predict, mask_input_labels)
-        model_recall.update(predict, mask_input_labels)
-        f1_score = model_f1(predict, mask_input_labels)
-        model_f1.update(predict, mask_input_labels)
+        # precision_score = model_precision(predict, mask_input_labels)
+        # model_precision.update(predict, mask_input_labels)
+        # recall_score = model_recall(predict, mask_input_labels)
+        # model_recall.update(predict, mask_input_labels)
+        # f1_score = model_f1(predict, mask_input_labels)
+        # model_f1.update(predict, mask_input_labels)
 
         '''
         实际预测值与目标值的
@@ -227,17 +227,19 @@ def evaluate(model, eval_data_loader, epoch):
         eval_mlm_loss += masked_lm_loss.detach()
         # eval_nsp_loss += next_sentence_loss.detach()
         eval_total_loss += total_loss.detach()
-        print('--eval---eopch: %d----precision_score: %f----recall_score: %f----f1_score: %f----mlm_loss: %f------ 损失函数: %.6f-' % (
-            epoch, precision_score, recall_score, f1_score, masked_lm_loss, total_loss))
+        print('--eval---eopch: %d-----mlm_loss: %f------ 损失函数: %.6f-' % (
+            epoch,  masked_lm_loss, total_loss))
+        # print('--eval---eopch: %d----precision_score: %f----recall_score: %f----f1_score: %f----mlm_loss: %f------ 损失函数: %.6f-' % (
+        #     epoch, precision_score, recall_score, f1_score, masked_lm_loss, total_loss))
 
     viz.line(Y=[
         (eval_mlm_loss / eval_step, eval_total_loss / eval_step)], X=[(epoch + 1, epoch + 1)], win="pitcure_2",
         update='append')
-    viz.line(Y=[(model_precision.compute().to('cpu'), model_recall.compute().to('cpu'), model_f1.compute().to('cpu'))],
-             X=[(epoch + 1, epoch + 1, epoch + 1)], win="pitcure_3", update='append')
-    model_precision.reset()
-    model_recall.reset()
-    model_f1.reset()
+    # viz.line(Y=[(model_precision.compute().to('cpu'), model_recall.compute().to('cpu'), model_f1.compute().to('cpu'))],
+    #          X=[(epoch + 1, epoch + 1, epoch + 1)], win="pitcure_3", update='append')
+    # model_precision.reset()
+    # model_recall.reset()
+    # model_f1.reset()
 
 # 进行训练
 for epoch in range(epoch_size):  # 所有数据迭代总的次数
