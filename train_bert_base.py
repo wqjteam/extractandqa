@@ -37,11 +37,9 @@ data_collator = DataCollatorForWholeWordMaskSpecial(tokenizer=tokenizer,
                                                     mlm=True,
                                                     mlm_probability=0.15,
                                                     return_tensors="pt")
-if len(sys.argv) >= 4 and sys.argv[3] == 'origin':
-    data_collator = DataCollatorForWholeWordMaskOriginal(tokenizer=tokenizer,
-                                                         mlm=True,
-                                                         mlm_probability=0.15,
-                                                         return_tensors="pt")
+appendrelicmodel = False
+if len(sys.argv) >= 4 and sys.argv[3] == 'True':
+    appendrelicmodel = True
 
 '''
 获取数据
@@ -57,7 +55,7 @@ virtualrelic_setence = []
 virtualrelic_keyword = []
 for row in passage_keyword_json_virtualrelic_file.readlines():
     tmp_list = row.split(':')  # 按‘:'切分每行的数据
-    maxlen=510 if len(row)>510 else len(row)
+    maxlen = 510 if len(row) > 510 else len(row)
     virtualrelic_setence.append(row[0:maxlen])
     virtualrelic_keyword.append([tmp_list[0]])
 virtualrelic_setence_keyword = np.concatenate(
@@ -66,13 +64,19 @@ passage_keyword_json_virtualrelic = pd.DataFrame(data=virtualrelic_setence_keywo
 
 union_pd = pd.concat(
     [passage_keyword_json_realrelic.loc[:, ['sentence', 'keyword']], passage_keyword_json_virtualrelic], axis=0)
-train_data = union_pd.values
 
+if appendrelicmodel:
+    train_data = union_pd.values
+else:
+    train_data = passage_keyword_json_realrelic.loc[:, ['sentence', 'keyword']].values
 # train_data = train_data[:20]
+
 
 _, dev_data = Data.random_split(union_pd.values, [int(len(union_pd.values) * 0.9),
                                                   len(union_pd.values) - int(
                                                       len(union_pd.values) * 0.9)])
+
+
 # dev_data=dev_data[:2]
 
 def create_batch(data, tokenizer, data_collator, keyword_flag=False):
@@ -231,8 +235,9 @@ def evaluate(model, eval_data_loader, epoch):
         eval_total_loss += total_loss.detach()
         # print('--eval---eopch: %d-----mlm_loss: %f------ 损失函数: %.6f-' % (
         #     epoch,  masked_lm_loss, total_loss))
-        print('--eval---eopch: %d----precision_score: %f----recall_score: %f----f1_score: %f----mlm_loss: %f------ 损失函数: %.6f-' % (
-            epoch, precision_score, recall_score, f1_score, masked_lm_loss, total_loss))
+        print(
+            '--eval---eopch: %d----precision_score: %f----recall_score: %f----f1_score: %f----mlm_loss: %f------ 损失函数: %.6f-' % (
+                epoch, precision_score, recall_score, f1_score, masked_lm_loss, total_loss))
 
     viz.line(Y=[
         (eval_mlm_loss / eval_step, eval_total_loss / eval_step)], X=[(epoch + 1, epoch + 1)], win="pitcure_2",
@@ -242,6 +247,7 @@ def evaluate(model, eval_data_loader, epoch):
     model_precision.reset()
     model_recall.reset()
     model_f1.reset()
+
 
 # 进行训练
 for epoch in range(epoch_size):  # 所有数据迭代总的次数
