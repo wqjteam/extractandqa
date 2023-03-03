@@ -1,6 +1,7 @@
 ﻿# -*- coding: utf-8 -*-
 import os
 import sys
+from collections import OrderedDict
 from functools import partial
 
 import numpy as np
@@ -11,7 +12,7 @@ import torchmetrics
 from torch import nn
 from torch.nn import CrossEntropyLoss
 from torch.optim import Adam
-from transformers import AutoTokenizer, AutoModelForPreTraining
+from transformers import AutoTokenizer, AutoModelForPreTraining, AutoConfig
 from visdom import Visdom
 
 from PraticeOfTransformers import Utils
@@ -37,9 +38,30 @@ data_collator = DataCollatorForWholeWordMaskSpecial(tokenizer=tokenizer,
                                                     mlm=True,
                                                     mlm_probability=0.15,
                                                     return_tensors="pt")
+
 appendrelicmodel = False
 if len(sys.argv) >= 4 and sys.argv[3] == 'True':
     appendrelicmodel = True
+
+
+
+if len(sys.argv) >= 5 :
+    print('-------------load para------------------%s--------------'%sys.argv[4])
+    config = AutoConfig.from_pretrained(pretrained_model_name_or_path=model_name)
+    model = CustomModelForBaseBertWithoutNsp(config)
+
+    state_dict = torch.load(sys.argv[4])
+    new_state_dict = OrderedDict()
+    for k, v in state_dict.items():  # k为module.xxx.weight, v为权重
+        if k.startswith('module.'):
+            name = k[7:]  # 截取`module.`后面的xxx.weight
+            new_state_dict[name] = v
+        else:
+            new_state_dict[k] = v
+
+    # 因为后面的参数没有初始化，所以采用非强制性约束,多GPu的加载到单GPU上需要, map_location='cuda:0'
+    model.load_state_dict(new_state_dict, strict=True)
+    model_name = "special-keyword-bert-chinese"
 
 '''
 获取数据
