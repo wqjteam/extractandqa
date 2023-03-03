@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import os
 import sys
+from collections import OrderedDict
 from functools import partial
 
 import torch
@@ -39,10 +40,22 @@ model = BertForNerAppendBiLstmAndCrf.from_pretrained(pretrained_model_name_or_pa
                                                      num_labels=len(ner_label_id))  # num_labels 测试用一下，看看参数是否传递
 # 获取模型路径
 if len(sys.argv) >= 4:
+    print('-------------load para------------------%s--------------'%sys.argv[3])
     config = AutoConfig.from_pretrained(pretrained_model_name_or_path=model_name, num_labels=len(ner_label_id))
     model = BertForNerAppendBiLstmAndCrf(config)
     # 因为后面的参数没有初始化，所以采用非强制性约束
-    model.load_state_dict(torch.load(sys.argv[3]), strict=False)
+    state_dict=torch.load(sys.argv[3])
+
+    new_state_dict = OrderedDict()
+    for k, v in state_dict.items():  # k为module.xxx.weight, v为权重
+        if k.startswith('module.'):
+            name = k[7:]  # 截取`module.`后面的xxx.weight
+            new_state_dict[name] = v
+        else:
+            new_state_dict[k] = v
+
+    # 因为后面的参数没有初始化，所以采用非强制性约束,多GPu的加载到单GPU上需要, map_location='cuda:0'
+    model.load_state_dict(new_state_dict, strict=True)
     model_name = "special-keyword-bert-chinese"
 
 # 加载数据集
