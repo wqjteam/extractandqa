@@ -293,7 +293,7 @@ def evaluate(model, eval_data_loader, epoch, tokenizer):
 
     viz.line(Y=[
         (eval_nsp_loss / eval_step, eval_qa_loss / eval_step, eval_total_loss / eval_step)],
-        X=[(epoch + 1, epoch + 1, epoch + 1, epoch + 1)], win="pitcure_2", update='append')
+        X=[( epoch + 1, epoch + 1, epoch + 1)], win="pitcure_2", update='append')
     viz.line(Y=[(eval_em_score / eval_step, eval_f1_score / eval_step)],
              X=[(epoch + 1, epoch + 1)], win="pitcure_3", update='append')
 
