@@ -305,7 +305,7 @@ for epoch in range(epoch_size):  # 所有数据迭代总的次数
         else:
             model_config = model.config
         loss, outputs = model_output
-        optim.zero_grad()  # 每次计算的时候需要把上次计算的梯度设置为0
+        optimizer.zero_grad()  # 每次计算的时候需要把上次计算的梯度设置为0
 
         total_step += 1
         total_loss += torch.mean(loss).detach().cpu()
@@ -313,7 +313,7 @@ for epoch in range(epoch_size):  # 所有数据迭代总的次数
         print('第%d个epoch的%d批数据的loss：%f' % (epoch + 1, step + 1, torch.mean(loss).detach().cpu()))
 
         loss.backward(torch.ones_like(loss))  # 反向传播
-        optim.step()  # 用来更新参数，也就是的w和b的参数更新操作
+        optimizer.step()  # 用来更新参数，也就是的w和b的参数更新操作
         scheduler.step()  # warm_up
     viz.line(Y=[total_loss / total_step], X=[epoch + 1], win="pitcure_1", update='append')
     evaluate(model, dev_dataloader, epoch)
