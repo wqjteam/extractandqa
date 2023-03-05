@@ -56,7 +56,7 @@ class CustomModelForNSPQABILSTM(BertPreTrainedModel):
         )
 
 
-        self.dropout = nn.Dropout(0.05)
+        self.dropout = nn.Dropout(0.15)
 
         self.pooler = BertPooler(config)
 
