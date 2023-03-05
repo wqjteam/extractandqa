@@ -1,5 +1,6 @@
 ﻿# -*- coding: utf-8 -*-
 import os
+from collections import OrderedDict
 from functools import partial
 
 import numpy as np
@@ -49,11 +50,20 @@ if len(sys.argv) >= 5 and sys.argv[4] == 'True':
 
 # 获取模型路径
 if len(sys.argv) >= 6:
-
+    print('-------------load para------------------%s--------------' % sys.argv[5])
     config = AutoConfig.from_pretrained(model_name, num_labels=2)
     model = BertForUnionNspAndQA(config)
+
+    state_dict = torch.load(sys.argv[5])
+    new_state_dict = OrderedDict()
+    for k, v in state_dict.items():  # k为module.xxx.weight, v为权重
+        if k.startswith('module.'):
+            name = k[7:]  # 截取`module.`后面的xxx.weight
+            new_state_dict[name] = v
+        else:
+            new_state_dict[k] = v
     # 因为后面的参数没有初始化，所以采用非强制性约束
-    model.load_state_dict(torch.load(sys.argv[5]), strict=False)
+    model.load_state_dict(new_state_dict, strict=False)
 else:
     ##完全继承
     model = BertForUnionNspAndQA.from_pretrained(model_name, num_labels=2)  # num_labels 测试用一下，看看参数是否传递

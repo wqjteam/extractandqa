@@ -1,6 +1,7 @@
 ﻿# -*- coding: utf-8 -*-
 import os
 import sys
+from collections import OrderedDict
 from functools import partial
 
 import numpy as np
@@ -11,7 +12,7 @@ import torchmetrics
 from torch import nn
 from torch.nn import CrossEntropyLoss
 from torch.optim import Adam
-from transformers import AutoTokenizer, AutoModelForPreTraining
+from transformers import AutoTokenizer, AutoModelForPreTraining, AutoConfig
 from visdom import Visdom
 
 from PraticeOfTransformers import Utils
@@ -37,11 +38,30 @@ data_collator = DataCollatorForWholeWordMaskSpecial(tokenizer=tokenizer,
                                                     mlm=True,
                                                     mlm_probability=0.15,
                                                     return_tensors="pt")
-if len(sys.argv) >= 4 and sys.argv[3] == 'origin':
-    data_collator = DataCollatorForWholeWordMaskOriginal(tokenizer=tokenizer,
-                                                         mlm=True,
-                                                         mlm_probability=0.15,
-                                                         return_tensors="pt")
+
+appendrelicmodel = False
+if len(sys.argv) >= 4 and sys.argv[3] == 'True':
+    appendrelicmodel = True
+
+
+
+if len(sys.argv) >= 5 :
+    print('-------------load para------------------%s--------------'%sys.argv[4])
+    config = AutoConfig.from_pretrained(pretrained_model_name_or_path=model_name)
+    model = CustomModelForBaseBertWithoutNsp(config)
+
+    state_dict = torch.load(sys.argv[4])
+    new_state_dict = OrderedDict()
+    for k, v in state_dict.items():  # k为module.xxx.weight, v为权重
+        if k.startswith('module.'):
+            name = k[7:]  # 截取`module.`后面的xxx.weight
+            new_state_dict[name] = v
+        else:
+            new_state_dict[k] = v
+
+    # 因为后面的参数没有初始化，所以采用非强制性约束,多GPu的加载到单GPU上需要, map_location='cuda:0'
+    model.load_state_dict(new_state_dict, strict=True)
+    model_name = "special-keyword-bert-chinese"
 
 '''
 获取数据
@@ -57,7 +77,8 @@ virtualrelic_setence = []
 virtualrelic_keyword = []
 for row in passage_keyword_json_virtualrelic_file.readlines():
     tmp_list = row.split(':')  # 按‘:'切分每行的数据
-    virtualrelic_setence.append(row)
+    maxlen = 510 if len(row) > 510 else len(row)
+    virtualrelic_setence.append(row[0:maxlen])
     virtualrelic_keyword.append([tmp_list[0]])
 virtualrelic_setence_keyword = np.concatenate(
     (np.array(virtualrelic_setence).reshape(-1, 1), np.array(virtualrelic_keyword, dtype=list).reshape(-1, 1)), axis=1)
@@ -65,13 +86,19 @@ passage_keyword_json_virtualrelic = pd.DataFrame(data=virtualrelic_setence_keywo
 
 union_pd = pd.concat(
     [passage_keyword_json_realrelic.loc[:, ['sentence', 'keyword']], passage_keyword_json_virtualrelic], axis=0)
-train_data = union_pd.values
 
+if appendrelicmodel:
+    train_data = union_pd.values
+else:
+    train_data = passage_keyword_json_realrelic.loc[:, ['sentence', 'keyword']].values
 # train_data = train_data[:20]
+
 
 _, dev_data = Data.random_split(union_pd.values, [int(len(union_pd.values) * 0.9),
                                                   len(union_pd.values) - int(
                                                       len(union_pd.values) * 0.9)])
+
+
 # dev_data=dev_data[:2]
 
 def create_batch(data, tokenizer, data_collator, keyword_flag=False):
@@ -136,11 +163,11 @@ dev_dataloader = Data.DataLoader(
 )
 
 # 实例化相关metrics的计算对象   len(ner_id_label)+1是为了ignore_index用 他不允许为负数值 这里忽略了，所以不影响结果
-model_recall = torchmetrics.Recall(num_classes=model.config.vocab_size + 1, mdmc_average='global',
+model_recall = torchmetrics.Recall(num_classes=model.config.vocab_size + 1, mdmc_average='samplewise',
                                    ignore_index=model.config.vocab_size)
-model_precision = torchmetrics.Precision(num_classes=model.config.vocab_size + 1, mdmc_average='global',
+model_precision = torchmetrics.Precision(num_classes=model.config.vocab_size + 1, mdmc_average='samplewise',
                                          ignore_index=model.config.vocab_size)
-model_f1 = torchmetrics.F1Score(num_classes=model.config.vocab_size + 1, mdmc_average='global',
+model_f1 = torchmetrics.F1Score(num_classes=model.config.vocab_size + 1, mdmc_average='samplewise',
                                 ignore_index=model.config.vocab_size)
 
 # 看是否用cpu或者gpu训练
@@ -178,8 +205,9 @@ def evaluate(model, eval_data_loader, epoch):
     for return_batch_data in eval_data_loader:  # 一个batch一个bach的训练完所有数据
         mask_input_ids, attention_masks, token_type_ids, mask_input_labels, nsp_labels = return_batch_data
 
-        model_output = model(input_ids=mask_input_ids.to(device), attention_mask=attention_masks.to(device),
-                             token_type_ids=token_type_ids.to(device))
+        with torch.no_grad():
+            model_output = model(input_ids=mask_input_ids.to(device), attention_mask=attention_masks.to(device),
+                                 token_type_ids=token_type_ids.to(device))
         if torch.cuda.is_available() and torch.cuda.device_count() > 1:
             model_config = model.module.config
         else:
@@ -206,12 +234,12 @@ def evaluate(model, eval_data_loader, epoch):
         '''
         update 是计算当个batch的值  compute计算所有累加的值
         '''
-        # precision_score = model_precision(predict, mask_input_labels)
-        # model_precision.update(predict, mask_input_labels)
-        # recall_score = model_recall(predict, mask_input_labels)
-        # model_recall.update(predict, mask_input_labels)
-        # f1_score = model_f1(predict, mask_input_labels)
-        # model_f1.update(predict, mask_input_labels)
+        precision_score = model_precision(predict, mask_input_labels)
+        model_precision.update(predict, mask_input_labels)
+        recall_score = model_recall(predict, mask_input_labels)
+        model_recall.update(predict, mask_input_labels)
+        f1_score = model_f1(predict, mask_input_labels)
+        model_f1.update(predict, mask_input_labels)
 
         '''
         实际预测值与目标值的
@@ -227,19 +255,21 @@ def evaluate(model, eval_data_loader, epoch):
         eval_mlm_loss += masked_lm_loss.detach()
         # eval_nsp_loss += next_sentence_loss.detach()
         eval_total_loss += total_loss.detach()
-        print('--eval---eopch: %d-----mlm_loss: %f------ 损失函数: %.6f-' % (
-            epoch,  masked_lm_loss, total_loss))
-        # print('--eval---eopch: %d----precision_score: %f----recall_score: %f----f1_score: %f----mlm_loss: %f------ 损失函数: %.6f-' % (
-        #     epoch, precision_score, recall_score, f1_score, masked_lm_loss, total_loss))
+        # print('--eval---eopch: %d-----mlm_loss: %f------ 损失函数: %.6f-' % (
+        #     epoch,  masked_lm_loss, total_loss))
+        print(
+            '--eval---eopch: %d----precision_score: %f----recall_score: %f----f1_score: %f----mlm_loss: %f------ 损失函数: %.6f-' % (
+                epoch, precision_score, recall_score, f1_score, masked_lm_loss, total_loss))
 
     viz.line(Y=[
         (eval_mlm_loss / eval_step, eval_total_loss / eval_step)], X=[(epoch + 1, epoch + 1)], win="pitcure_2",
         update='append')
-    # viz.line(Y=[(model_precision.compute().to('cpu'), model_recall.compute().to('cpu'), model_f1.compute().to('cpu'))],
-    #          X=[(epoch + 1, epoch + 1, epoch + 1)], win="pitcure_3", update='append')
-    # model_precision.reset()
-    # model_recall.reset()
-    # model_f1.reset()
+    viz.line(Y=[(model_precision.compute().to('cpu'), model_recall.compute().to('cpu'), model_f1.compute().to('cpu'))],
+             X=[(epoch + 1, epoch + 1, epoch + 1)], win="pitcure_3", update='append')
+    model_precision.reset()
+    model_recall.reset()
+    model_f1.reset()
+
 
 # 进行训练
 for epoch in range(epoch_size):  # 所有数据迭代总的次数

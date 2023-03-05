@@ -91,7 +91,7 @@ train_steps_per_epoch = len(train_data) // batch_size
 scheduler = get_cosine_schedule_with_warmup(optimizer,
                                             num_warmup_steps=(epoch_size // 10) * train_steps_per_epoch,
                                             num_training_steps=epoch_size * train_steps_per_epoch)
-optim = AdamW(model.parameters(), lr=learning_rate)  # 需要填写模型的参数
+
 
 print(model)
 
