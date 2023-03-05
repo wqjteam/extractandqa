@@ -92,9 +92,9 @@ if full_fine_tuning:
     no_decay = ['bias', 'LayerNorm.bias', 'LayerNorm.weight']
     optimizer_grouped_parameters = [
         {'params': [p for n, p in bert_optimizer if not any(nd in n for nd in no_decay)],
-         'weight_decay': weight_decay},
+         'lr': learning_rate * 5,'weight_decay': weight_decay},
         {'params': [p for n, p in bert_optimizer if any(nd in n for nd in no_decay)],  # 对于在no_decay 不进行正则化
-         'weight_decay': 0.0},
+         'lr': learning_rate * 5,'weight_decay': 0.0},
         {'params': [p for n, p in lstm_optimizer if not any(nd in n for nd in no_decay)],
          'lr': learning_rate * 100, 'weight_decay': weight_decay},
         {'params': [p for n, p in lstm_optimizer if any(nd in n for nd in no_decay)],
