@@ -100,17 +100,17 @@ if full_fine_tuning:
         {'params': [p for n, p in lstm_optimizer if any(nd in n for nd in no_decay)],
          'lr': learning_rate * 100, 'weight_decay': 0.0},
         {'params': [p for n, p in nsp_cls_optimizer if not any(nd in n for nd in no_decay)],
-         'lr': learning_rate * 100, 'weight_decay': weight_decay},
+         'lr': learning_rate * 10, 'weight_decay': weight_decay},
         {'params': [p for n, p in nsp_cls_optimizer if any(nd in n for nd in no_decay)],
-         'lr': learning_rate * 100, 'weight_decay': 0.0},
+         'lr': learning_rate * 10, 'weight_decay': 0.0},
         {'params': [p for n, p in pooler_optimizer if not any(nd in n for nd in no_decay)],
-         'lr': learning_rate * 100, 'weight_decay': weight_decay},
+         'lr': learning_rate * 10, 'weight_decay': weight_decay},
         {'params': [p for n, p in pooler_optimizer if any(nd in n for nd in no_decay)],
-         'lr': learning_rate * 100, 'weight_decay': 0.0},
+         'lr': learning_rate * 10, 'weight_decay': 0.0},
         {'params': [p for n, p in qa_outputs_optimizer if not any(nd in n for nd in no_decay)],
-         'lr': learning_rate * 100, 'weight_decay': weight_decay},
+         'lr': learning_rate * 10, 'weight_decay': weight_decay},
         {'params': [p for n, p in qa_outputs_optimizer if any(nd in n for nd in no_decay)],
-         'lr': learning_rate * 100, 'weight_decay': 0.0},
+         'lr': learning_rate * 10, 'weight_decay': 0.0},
 
     ]
     # only fine-tune the head classifier
