@@ -36,7 +36,8 @@ ner_id_label = {0: '[CLS]', 1: '[SEP]', 2: 'O', 3: 'B-ORG', 4: 'B-PER', 5: 'B-LO
 ner_label_id = {}
 for key in ner_id_label:
     ner_label_id[ner_id_label[key]] = key
-
+id2labelids=[0,1,2,3,4,5,6,7,8,9,10,11,12]
+id2labelvalues=['[CLS]','[SEP]','O','B-ORG','B-PER','B-LOC','B-TIME','B-BOOK','I-ORG','I-PER','I-LOC','I-TIME','I-BOOK']
 model = BertForTokenClassification.from_pretrained(pretrained_model_name_or_path=model_name,
                                                      num_labels=len(ner_label_id))  # num_labels 测试用一下，看看参数是否传递
 # 获取模型路径
@@ -274,8 +275,8 @@ def evaluate(model, eval_data_loader, epoch):
     viz.line(Y=[eval_total_loss / eval_step], X=[epoch + 1], win="pitcure_2", update='append')
     viz.line(Y=[(model_precision.compute().to('cpu'), model_recall.compute().to('cpu'), model_f1.compute().to('cpu'))],
              X=[(epoch + 1, epoch + 1, epoch + 1)], win="pitcure_3", update='append')
-    print(metrics.classification_report(eval_predict, eval_target, labels=list(ner_id_label.keys()),
-                                        target_names=ner_id_label.values(), digits=3))
+    print(metrics.classification_report(eval_predict, eval_target, labels=id2labelids,
+                                        target_names=id2labelvalues, digits=3))
     model_precision.reset()
     model_recall.reset()
     model_f1.reset()
