@@ -280,10 +280,10 @@ def evaluate(model, eval_data_loader, epoch):
         eval_step += 1
 
         eval_total_loss += torch.mean(loss).detach().cpu()
-        eval_predict.extend(np.array(predict.detach().cpu().view(-1)))
-        eval_target.extend(np.array(labels.detach().cpu().view(-1)))
         print('--eval---eopch: %d --precision得分: %.6f--recall得分: %.6f--- f1得分: %.6f- 损失函数: %.6f' % (
             epoch, precision_score, recall_score, f1_score, torch.mean(loss).detach().cpu()))
+        eval_predict.extend(np.array(predict.contiguous().detach().cpu().view(-1)))
+        eval_target.extend(np.array(labels.contiguous().detach().cpu().view(-1)))
     viz.line(Y=[eval_total_loss / eval_step], X=[epoch + 1], win="pitcure_2", update='append')
     viz.line(Y=[(model_precision.compute().to('cpu'), model_recall.compute().to('cpu'), model_f1.compute().to('cpu'))],
              X=[(epoch + 1, epoch + 1, epoch + 1)], win="pitcure_3", update='append')
