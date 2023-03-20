@@ -211,7 +211,7 @@ model_f1 = torchmetrics.F1Score(num_classes=len(ner_id_label) + 1, mdmc_average=
                                 ignore_index=len(ner_id_label)).to(device)
 
 
-viz = Visdom(env=u'ner_%s_train' % (model_name))
+viz = Visdom(env=u'ner_%s_only_train' % (model_name))
 name = ['total_loss']
 name_precision_recall_f1 = ['precision_score', 'recall_score', 'f1_score']
 viz.line(Y=[(0.)], X=[(0.)], win="pitcure_1",
