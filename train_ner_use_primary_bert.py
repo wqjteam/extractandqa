@@ -12,7 +12,7 @@ from torch.optim import AdamW
 from transformers import AutoTokenizer, DataCollatorForTokenClassification, get_cosine_schedule_with_warmup, AutoConfig, \
     BertForTokenClassification
 from visdom import Visdom
-
+import numpy as np
 from PraticeOfTransformers import Utils
 from PraticeOfTransformers.CustomModelForNer import BertForNerAppendBiLstmAndCrf
 
@@ -68,37 +68,23 @@ train_data, dev_data = Data.random_split(nerdataset, [int(len(nerdataset) * 0.9)
                                                           len(nerdataset) * 0.9)],
                                          generator=torch.Generator().manual_seed(0))
 
-'''
-非bert层的学习率需要提高 crf需要为bert的
-bert 给是10−5量级
-crf  给10−2量级别 即bert的是1000倍
-而对其biases参数和BN层的gamma和beta参数不进行衰减
-首先正则化主要是为了防止过拟合，而过拟合一般表现为模型对于输入的微小改变产生了输出的较大差异，
-这主要是由于有些参数w过大的关系，通过对||w||进行惩罚，可以缓解这种问题。
-而如果对||b||进行惩罚，其实是没有作用的，因为在对输出结果的贡献中
-参数b对于输入的改变是不敏感的，不管输入改变是大还是小，参数b的贡献就只是加个偏置而已，他不背锅
-'''
-# 用于梯度回归
 if full_fine_tuning:
     # model.named_parameters(): [bert, bilstm, classifier, crf]
     bert_optimizer = list(model.bert.named_parameters())
-    lstm_optimizer = list(model.bilstm.named_parameters())
+
     classifier_optimizer = list(model.classifier.named_parameters())
     no_decay = ['bias', 'LayerNorm.bias', 'LayerNorm.weight']
     optimizer_grouped_parameters = [
         {'params': [p for n, p in bert_optimizer if not any(nd in n for nd in no_decay)],
-         'weight_decay': weight_decay},
+         'lr': learning_rate ,'weight_decay': weight_decay},
         {'params': [p for n, p in bert_optimizer if any(nd in n for nd in no_decay)],  # 对于在no_decay 不进行正则化
-         'weight_decay': 0.0},
-        {'params': [p for n, p in lstm_optimizer if not any(nd in n for nd in no_decay)],
-         'lr': learning_rate * 100, 'weight_decay': weight_decay},
-        {'params': [p for n, p in lstm_optimizer if any(nd in n for nd in no_decay)],
-         'lr': learning_rate * 100, 'weight_decay': 0.0},
+         'lr': learning_rate ,'weight_decay': 0.0},
+
         {'params': [p for n, p in classifier_optimizer if not any(nd in n for nd in no_decay)],
          'lr': learning_rate * 100, 'weight_decay': weight_decay},
         {'params': [p for n, p in classifier_optimizer if any(nd in n for nd in no_decay)],
          'lr': learning_rate * 100, 'weight_decay': 0.0},
-        {'params': model.crf.parameters(), 'lr': learning_rate * 1000}
+
     ]
     # only fine-tune the head classifier
 else:
@@ -106,6 +92,8 @@ else:
     optimizer_grouped_parameters = [{'params': [p for n, p in param_optimizer]}]
 
 optimizer = AdamW(optimizer_grouped_parameters, lr=learning_rate)
+
+# optimizer = AdamW(model.parameters(), lr=learning_rate)
 
 train_steps_per_epoch = len(train_data) // batch_size
 
@@ -240,6 +228,8 @@ def evaluate(model, eval_data_loader, epoch):
     # 评估之前将其重置
     eval_total_loss = 0
     eval_step = 0
+    eval_predict=[]
+    eval_target=[]
     # 依次处理每批数据
     for return_batch_data in eval_data_loader:  # 一个batch一个bach的训练完所有数据
 
@@ -247,16 +237,15 @@ def evaluate(model, eval_data_loader, epoch):
         token_type_ids = return_batch_data['token_type_ids']
         attention_masks = return_batch_data['attention_mask']
         labels = return_batch_data['labels']
-
-        model_output = model(input_ids.to(device), token_type_ids=token_type_ids.to(device), labels=labels.to(device),
-                             is_test=True)
+        with torch.no_grad():
+            model_output = model(input_ids.to(device), token_type_ids=token_type_ids.to(device), labels=labels.to(device))
         if torch.cuda.is_available() and torch.cuda.device_count() > 1:
             model_config = model.module.config
         else:
             model_config = model.config
-        loss, outputs = model_output
+        loss, outputs = model_output.loss,model_output.logits
 
-        predict = outputs.view(-1, outputs.shape[2])
+        predict = torch.argmax(outputs, dim=2)
 
         # 这里方便计算用，-100 torchmetrics无法使用
         # predict[predict == -100] = len(ner_id_label)
@@ -278,12 +267,15 @@ def evaluate(model, eval_data_loader, epoch):
         eval_step += 1
 
         eval_total_loss += torch.mean(loss).detach().cpu()
-        metrics.classification_report(predict.cpu(),labels.cpu(),target_names=ner_id_label.values(),digits=3)
+        eval_predict.extend(np.array(predict.detach().cpu().view(-1)))
+        eval_target.extend(np.array(labels.detach().cpu().view(-1)))
         print('--eval---eopch: %d --precision得分: %.6f--recall得分: %.6f--- f1得分: %.6f- 损失函数: %.6f' % (
             epoch, precision_score, recall_score, f1_score, torch.mean(loss).detach().cpu()))
     viz.line(Y=[eval_total_loss / eval_step], X=[epoch + 1], win="pitcure_2", update='append')
     viz.line(Y=[(model_precision.compute().to('cpu'), model_recall.compute().to('cpu'), model_f1.compute().to('cpu'))],
              X=[(epoch + 1, epoch + 1, epoch + 1)], win="pitcure_3", update='append')
+    print(metrics.classification_report(eval_predict, eval_target, labels=list(ner_id_label.keys()),
+                                        target_names=ner_id_label.values(), digits=3))
     model_precision.reset()
     model_recall.reset()
     model_f1.reset()
@@ -305,7 +297,7 @@ for epoch in range(epoch_size):  # 所有数据迭代总的次数
             model_config = model.module.config
         else:
             model_config = model.config
-        loss, outputs = model_output
+        loss, outputs =model_output.loss, model_output.logits
         optimizer.zero_grad()  # 每次计算的时候需要把上次计算的梯度设置为0
 
         total_step += 1

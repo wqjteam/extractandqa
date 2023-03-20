@@ -3,7 +3,8 @@ import os
 import sys
 from collections import OrderedDict
 from functools import partial
-
+from sklearn import metrics
+import numpy as np
 import torch
 import torch.utils.data as Data
 import torchmetrics
@@ -86,9 +87,9 @@ if full_fine_tuning:
     no_decay = ['bias', 'LayerNorm.bias', 'LayerNorm.weight']
     optimizer_grouped_parameters = [
         {'params': [p for n, p in bert_optimizer if not any(nd in n for nd in no_decay)],
-         'weight_decay': weight_decay},
+         'lr': learning_rate , 'weight_decay': weight_decay},
         {'params': [p for n, p in bert_optimizer if any(nd in n for nd in no_decay)],  # 对于在no_decay 不进行正则化
-         'weight_decay': 0.0},
+         'lr': learning_rate , 'weight_decay': 0.0},
         {'params': [p for n, p in lstm_optimizer if not any(nd in n for nd in no_decay)],
          'lr': learning_rate * 100, 'weight_decay': weight_decay},
         {'params': [p for n, p in lstm_optimizer if any(nd in n for nd in no_decay)],
@@ -239,6 +240,8 @@ def evaluate(model, eval_data_loader, epoch):
     # 评估之前将其重置
     eval_total_loss = 0
     eval_step = 0
+    eval_predict=[]
+    eval_target=[]
     # 依次处理每批数据
     for return_batch_data in eval_data_loader:  # 一个batch一个bach的训练完所有数据
 
@@ -277,12 +280,15 @@ def evaluate(model, eval_data_loader, epoch):
         eval_step += 1
 
         eval_total_loss += torch.mean(loss).detach().cpu()
-
+        eval_predict.extend(np.array(predict.detach().cpu().view(-1)))
+        eval_target.extend(np.array(labels.detach().cpu().view(-1)))
         print('--eval---eopch: %d --precision得分: %.6f--recall得分: %.6f--- f1得分: %.6f- 损失函数: %.6f' % (
             epoch, precision_score, recall_score, f1_score, torch.mean(loss).detach().cpu()))
     viz.line(Y=[eval_total_loss / eval_step], X=[epoch + 1], win="pitcure_2", update='append')
     viz.line(Y=[(model_precision.compute().to('cpu'), model_recall.compute().to('cpu'), model_f1.compute().to('cpu'))],
              X=[(epoch + 1, epoch + 1, epoch + 1)], win="pitcure_3", update='append')
+    print(metrics.classification_report(eval_predict, eval_target, labels=list(ner_id_label.keys()),
+                                        target_names=ner_id_label.values(), digits=3))
     model_precision.reset()
     model_recall.reset()
     model_f1.reset()
