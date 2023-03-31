@@ -3,7 +3,8 @@ import os
 import sys
 from collections import OrderedDict
 from functools import partial
-
+from sklearn import metrics
+import numpy as np
 import torch
 import torch.utils.data as Data
 import torchmetrics
@@ -36,6 +37,8 @@ ner_label_id = {}
 for key in ner_id_label:
     ner_label_id[ner_id_label[key]] = key
 
+id2labelids=[0,1,2,3,4,5,6,7,8,9,10,11,12]
+id2labelvalues=['[CLS]','[SEP]','O','B-ORG','B-PER','B-LOC','B-TIME','B-BOOK','I-ORG','I-PER','I-LOC','I-TIME','I-BOOK']
 model = BertForNerAppendBiLstmAndCrf.from_pretrained(pretrained_model_name_or_path=model_name,
                                                      num_labels=len(ner_label_id))  # num_labels 测试用一下，看看参数是否传递
 # 获取模型路径
@@ -86,9 +89,9 @@ if full_fine_tuning:
     no_decay = ['bias', 'LayerNorm.bias', 'LayerNorm.weight']
     optimizer_grouped_parameters = [
         {'params': [p for n, p in bert_optimizer if not any(nd in n for nd in no_decay)],
-         'weight_decay': weight_decay},
+         'lr': learning_rate , 'weight_decay': weight_decay},
         {'params': [p for n, p in bert_optimizer if any(nd in n for nd in no_decay)],  # 对于在no_decay 不进行正则化
-         'weight_decay': 0.0},
+         'lr': learning_rate , 'weight_decay': 0.0},
         {'params': [p for n, p in lstm_optimizer if not any(nd in n for nd in no_decay)],
          'lr': learning_rate * 100, 'weight_decay': weight_decay},
         {'params': [p for n, p in lstm_optimizer if any(nd in n for nd in no_decay)],
@@ -239,6 +242,8 @@ def evaluate(model, eval_data_loader, epoch):
     # 评估之前将其重置
     eval_total_loss = 0
     eval_step = 0
+    eval_predict=[]
+    eval_target=[]
     # 依次处理每批数据
     for return_batch_data in eval_data_loader:  # 一个batch一个bach的训练完所有数据
 
@@ -277,12 +282,15 @@ def evaluate(model, eval_data_loader, epoch):
         eval_step += 1
 
         eval_total_loss += torch.mean(loss).detach().cpu()
-
         print('--eval---eopch: %d --precision得分: %.6f--recall得分: %.6f--- f1得分: %.6f- 损失函数: %.6f' % (
             epoch, precision_score, recall_score, f1_score, torch.mean(loss).detach().cpu()))
+        eval_predict.extend(np.array(predict.contiguous().detach().cpu().view(-1)))
+        eval_target.extend(np.array(labels.contiguous().detach().cpu().view(-1)))
     viz.line(Y=[eval_total_loss / eval_step], X=[epoch + 1], win="pitcure_2", update='append')
     viz.line(Y=[(model_precision.compute().to('cpu'), model_recall.compute().to('cpu'), model_f1.compute().to('cpu'))],
              X=[(epoch + 1, epoch + 1, epoch + 1)], win="pitcure_3", update='append')
+    print(metrics.classification_report(eval_predict, eval_target, labels=id2labelids,
+                                        target_names=id2labelvalues, digits=3))
     model_precision.reset()
     model_recall.reset()
     model_f1.reset()
