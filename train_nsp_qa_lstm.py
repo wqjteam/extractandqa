@@ -1,26 +1,20 @@
 ﻿# -*- coding: utf-8 -*-
 import os
+import sys
 from functools import partial
 
-import numpy as np
 import pandas as pd
 import torch
 import torch.utils.data as Data
-import torchmetrics
 from torch import nn
 from torch.nn import CrossEntropyLoss
-from torch.optim import AdamW, Adam
+from torch.optim import AdamW
+from transformers import AutoTokenizer, AutoConfig, get_cosine_schedule_with_warmup
 from visdom import Visdom
-from transformers import AutoTokenizer, DataCollatorForLanguageModeling, AutoConfig, get_cosine_schedule_with_warmup
 
 import CommonUtil
 from PraticeOfTransformers import Utils
 from PraticeOfTransformers.CustomModelForNSPQABILSTM import CustomModelForNSPQABILSTM
-from PraticeOfTransformers.DataCollatorForLanguageModelingSpecial import DataCollatorForLanguageModelingSpecial
-from PraticeOfTransformers.CustomModelForNSPQA import BertForUnionNspAndQA, NspAndQAConfig
-from PraticeOfTransformers.DataCollatorForWholeWordMaskOriginal import DataCollatorForWholeWordMaskOriginal
-from PraticeOfTransformers.DataCollatorForWholeWordMaskSpecial import DataCollatorForWholeWordMaskSpecial
-import sys
 
 model_name = 'bert-base-chinese'
 tokenizer = AutoTokenizer.from_pretrained(model_name)
