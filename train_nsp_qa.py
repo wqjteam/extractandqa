@@ -12,7 +12,7 @@ from torch import nn
 from torch.nn import CrossEntropyLoss
 from torch.optim import AdamW, Adam
 from visdom import Visdom
-from transformers import AutoTokenizer, DataCollatorForLanguageModeling, AutoConfig
+from transformers import AutoTokenizer, DataCollatorForLanguageModeling, AutoConfig, get_cosine_schedule_with_warmup
 
 import CommonUtil
 from PraticeOfTransformers import Utils
@@ -28,6 +28,9 @@ tokenizer = AutoTokenizer.from_pretrained(model_name)
 os.environ['CUDA_VISIBLE_DEVICES'] = '0,1'  # 指定GPU编号 多gpu训练
 batch_size = 2
 epoch_size = 1000
+learning_rate = 1e-5
+weight_decay = 0.01  # 最终目的是防止过拟合
+full_fine_tuning = True
 
 print('--------------------sys.argv:%s-------------------' % (','.join(sys.argv)))
 if len(sys.argv) >= 2:
@@ -68,8 +71,7 @@ else:
     ##完全继承
     model = BertForUnionNspAndQA.from_pretrained(model_name, num_labels=2)  # num_labels 测试用一下，看看参数是否传递
 
-# 用于梯度回归
-optim = Adam(model.parameters(), lr=5e-5)  # 需要填写模型的参数
+
 '''
 获取数据
 '''
@@ -232,6 +234,47 @@ train_dataloader = Data.DataLoader(
 dev_dataloader = Data.DataLoader(
     dev_data, shuffle=False, collate_fn=create_batch_partial, batch_size=batch_size
 )
+
+if full_fine_tuning:
+    # model.named_parameters(): [bert, bilstm, classifier, crf]
+    bert_optimizer = list(model.bert.named_parameters())
+    # lstm_optimizer = list(model.bilstm.named_parameters())
+    nsp_cls_optimizer = list(model.nsp_cls.named_parameters())
+    # pooler_optimizer = list(model.pooler.named_parameters())
+    qa_outputs_optimizer = list(model.qa_outputs.named_parameters())
+    no_decay = ['bias', 'LayerNorm.bias', 'LayerNorm.weight']
+    optimizer_grouped_parameters = [
+        {'params': [p for n, p in bert_optimizer if not any(nd in n for nd in no_decay)],
+         'lr': learning_rate * 5,'weight_decay': weight_decay},
+        {'params': [p for n, p in bert_optimizer if any(nd in n for nd in no_decay)],  # 对于在no_decay 不进行正则化
+         'lr': learning_rate * 5,'weight_decay': 0.0},
+        # {'params': [p for n, p in lstm_optimizer if not any(nd in n for nd in no_decay)],
+        #  'lr': learning_rate * 100, 'weight_decay': weight_decay},
+        # {'params': [p for n, p in lstm_optimizer if any(nd in n for nd in no_decay)],
+        #  'lr': learning_rate * 100, 'weight_decay': 0.0},
+        {'params': [p for n, p in nsp_cls_optimizer if not any(nd in n for nd in no_decay)],
+         'lr': learning_rate * 10, 'weight_decay': weight_decay},
+        {'params': [p for n, p in nsp_cls_optimizer if any(nd in n for nd in no_decay)],
+         'lr': learning_rate * 10, 'weight_decay': 0.0},
+        # {'params': [p for n, p in pooler_optimizer if not any(nd in n for nd in no_decay)],
+        #  'lr': learning_rate * 10, 'weight_decay': weight_decay},
+        # {'params': [p for n, p in pooler_optimizer if any(nd in n for nd in no_decay)],
+        #  'lr': learning_rate * 10, 'weight_decay': 0.0},
+        {'params': [p for n, p in qa_outputs_optimizer if not any(nd in n for nd in no_decay)],
+         'lr': learning_rate * 10, 'weight_decay': weight_decay},
+        {'params': [p for n, p in qa_outputs_optimizer if any(nd in n for nd in no_decay)],
+         'lr': learning_rate * 10, 'weight_decay': 0.0},
+
+    ]
+    # only fine-tune the head classifier
+else:
+    param_optimizer = list(model.classifier.named_parameters())
+    optimizer_grouped_parameters = [{'params': [p for n, p in param_optimizer]}]
+optim = AdamW(optimizer_grouped_parameters, lr=learning_rate)
+train_steps_per_epoch = len(train_data) // batch_size
+scheduler = get_cosine_schedule_with_warmup(optim,
+                                            num_warmup_steps=(epoch_size // 10) * train_steps_per_epoch,
+                                            num_training_steps=epoch_size * train_steps_per_epoch)
 
 # 看是否用cpu或者gpu训练
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -405,6 +448,7 @@ for epoch in range(epoch_size):  # 所有数据迭代总的次数
         total_loss.backward()  # 反向传播
 
         optim.step()  # 用来更新参数，也就是的w和b的参数更新操作
+        scheduler.step()  # warm_up
     # numpy不可以直接在有梯度的数据上获取，需要先去除梯度
     # 绘制epoch以及对应的测试集损失loss 第一个参数是y  第二个是x
     viz.line(Y=[(epoch_mlm_loss / epoch_step, epoch_nsp_loss / epoch_step, epoch_qa_loss / epoch_step,
