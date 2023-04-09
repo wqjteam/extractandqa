@@ -18,7 +18,7 @@ dataset = [ # For simplicity, there's only two examples
 
 
 from openprompt.plms import load_plm
-plm, tokenizer, model_config, WrapperClass = load_plm("bert", "bert-base-cased")
+plm, tokenizer, model_config, WrapperClass = load_plm("bert", "bert-base-uncased")
 
 
 from openprompt.prompts import ManualTemplate

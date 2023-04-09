@@ -290,6 +290,30 @@ def evaluate(model, eval_data_loader, epoch, tokenizer):
         X=[( epoch + 1, epoch + 1, epoch + 1)], win="pitcure_2", update='append')
     viz.line(Y=[(eval_em_score / eval_step, eval_f1_score / eval_step)],
              X=[(epoch + 1, epoch + 1)], win="pitcure_3", update='append')
+    # if eval_em_score / eval_step >= 74.3:
+    if eval_em_score / eval_step >= 0.2:
+        encoded_dict = tokenizer.batch_encode_plus(
+            batch_text_or_text_pairs=list(zip("春秋版画博物馆是坐落于北京的一所主要藏品为版画的博物馆。", "春秋版画博物馆在哪里？")),  # 输入文本对 # 输入文本,采用list[tuple(text,question)]的方式进行输入
+            add_special_tokens=True,  # 添加 '[CLS]' 和 '[SEP]'
+            max_length=512,  # 填充 & 截断长度
+            truncation=True,
+            padding='longest',
+            return_attention_mask=True,  # 返回 attn. masks.
+        )
+        model_output = model(input_ids=encoded_dict['mask_input_ids'].to(device),
+                             attention_mask=encoded_dict['attention_masks'].to(device),
+                             token_type_ids=encoded_dict['token_type_ids'].to(device))
+        qa_start_logits = model_output.qa_start_logits.to("cpu")
+        qa_end_logits = model_output.qa_end_logits.to("cpu")
+        qa_start_logits_argmax = torch.argmax(qa_start_logits, dim=1)
+        qa_end_logits_argmax = torch.argmax(qa_end_logits, dim=1)
+        qa_predict = [Utils.get_all_word(tokenizer, mask_input_ids[index, start:end].numpy().tolist()) for
+                      index, (start, end) in enumerate(zip(qa_start_logits_argmax, qa_end_logits_argmax))]
+        torch.save(model.state_dict(), 'save_model/nsp_qa_lstm/ultimate_nsp_qa_lstm_epoch_%d' % (epoch_size))
+        print(qa_predict)
+        print("结束！！！！！！！！！！！！！！！！")
+        sys.exit(0)
+
 
 
 # 进行训练

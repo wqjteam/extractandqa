@@ -291,10 +291,12 @@ def evaluate(model, eval_data_loader, epoch):
              X=[(epoch + 1, epoch + 1, epoch + 1)], win="pitcure_3", update='append')
     print(metrics.classification_report(eval_predict, eval_target, labels=id2labelids,
                                         target_names=id2labelvalues, digits=3))
+    if model_f1.compute().to('cpu')>=0.749:
+        torch.save(model.state_dict(), 'save_model/ner/ultimate_ner_epoch_%d' % (epoch_size))
+        sys.exit(0)
     model_precision.reset()
     model_recall.reset()
     model_f1.reset()
-
 
 for epoch in range(epoch_size):  # 所有数据迭代总的次数
 
