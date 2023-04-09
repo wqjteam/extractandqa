@@ -3,6 +3,7 @@ import os
 import sys
 from functools import partial
 
+import numpy as np
 import pandas as pd
 import torch
 import torch.utils.data as Data
@@ -59,7 +60,7 @@ passage_keyword_json = passage_keyword_json[passage_keyword_json['q_a'].apply(la
 
 # passage_keyword_json = passage_keyword_json[passage_keyword_json.nsp == 1]
 # passage_keyword_json = passage_keyword_json[passage_keyword_json['sentence'].apply(lambda x: '长治市博物馆，' in x)]
-
+passage_keyword_json = passage_keyword_json[:10]
 passage_keyword_json = passage_keyword_json.explode("q_a").values
 
 sent = ['我爱北京天安门，天安门上太阳升', '我爱北京中南海，毛主席在中南还', '改革开放好，我哎深圳，深圳是改革开放先驱']
@@ -86,9 +87,9 @@ if full_fine_tuning:
     no_decay = ['bias', 'LayerNorm.bias', 'LayerNorm.weight']
     optimizer_grouped_parameters = [
         {'params': [p for n, p in bert_optimizer if not any(nd in n for nd in no_decay)],
-         'lr': learning_rate * 5,'weight_decay': weight_decay},
+         'lr': learning_rate * 5, 'weight_decay': weight_decay},
         {'params': [p for n, p in bert_optimizer if any(nd in n for nd in no_decay)],  # 对于在no_decay 不进行正则化
-         'lr': learning_rate * 5,'weight_decay': 0.0},
+         'lr': learning_rate * 5, 'weight_decay': 0.0},
         {'params': [p for n, p in lstm_optimizer if not any(nd in n for nd in no_decay)],
          'lr': learning_rate * 100, 'weight_decay': weight_decay},
         {'params': [p for n, p in lstm_optimizer if any(nd in n for nd in no_decay)],
@@ -287,33 +288,49 @@ def evaluate(model, eval_data_loader, epoch, tokenizer):
 
     viz.line(Y=[
         (eval_nsp_loss / eval_step, eval_qa_loss / eval_step, eval_total_loss / eval_step)],
-        X=[( epoch + 1, epoch + 1, epoch + 1)], win="pitcure_2", update='append')
+        X=[(epoch + 1, epoch + 1, epoch + 1)], win="pitcure_2", update='append')
     viz.line(Y=[(eval_em_score / eval_step, eval_f1_score / eval_step)],
              X=[(epoch + 1, epoch + 1)], win="pitcure_3", update='append')
     # if eval_em_score / eval_step >= 74.3:
     if eval_em_score / eval_step >= 0.2:
         encoded_dict = tokenizer.batch_encode_plus(
-            batch_text_or_text_pairs=list(zip("春秋版画博物馆是坐落于北京的一所主要藏品为版画的博物馆。", "春秋版画博物馆在哪里？")),  # 输入文本对 # 输入文本,采用list[tuple(text,question)]的方式进行输入
+            batch_text_or_text_pairs=list(
+                zip(["春秋版画博物馆是坐落于北京的一所主要藏品为版画的博物馆。"], ["春秋版画博物馆在哪里？"])),
+            # 输入文本对 # 输入文本,采用list[tuple(text,question)]的方式进行输入
             add_special_tokens=True,  # 添加 '[CLS]' 和 '[SEP]'
             max_length=512,  # 填充 & 截断长度
             truncation=True,
             padding='longest',
             return_attention_mask=True,  # 返回 attn. masks.
         )
-        model_output = model(input_ids=encoded_dict['mask_input_ids'].to(device),
-                             attention_mask=encoded_dict['attention_masks'].to(device),
-                             token_type_ids=encoded_dict['token_type_ids'].to(device))
+        model_output = model(input_ids=torch.tensor(encoded_dict['input_ids']).to(device),
+                             attention_mask=torch.tensor(encoded_dict['attention_mask']).to(device),
+                             token_type_ids=torch.tensor(encoded_dict['token_type_ids']).to(device))
         qa_start_logits = model_output.qa_start_logits.to("cpu")
         qa_end_logits = model_output.qa_end_logits.to("cpu")
+        inputlen = len(tokenizer.convert_ids_to_tokens(encoded_dict['input_ids'][0]))
+        viz.barplot(X=qa_start_logits.view(-1)[:inputlen].tolist(), win="pitcure_4",
+                opts=dict(title='start_word_sorce',
+                          legend=tokenizer.convert_ids_to_tokens(encoded_dict['input_ids'][0]),
+                          xlabel='word',
+                          ylabel='score',
+                          markers=False))
+        viz.bar(X=qa_end_logits[:inputlen].tolist(), win="pitcure_5",
+                opts=dict(title='end_word_sorce',
+                          legend=tokenizer.convert_ids_to_tokens(encoded_dict['input_ids'][0]),
+                          xlabel='word',
+                          ylabel='score',
+                          markers=False))
+
         qa_start_logits_argmax = torch.argmax(qa_start_logits, dim=1)
         qa_end_logits_argmax = torch.argmax(qa_end_logits, dim=1)
         qa_predict = [Utils.get_all_word(tokenizer, mask_input_ids[index, start:end].numpy().tolist()) for
                       index, (start, end) in enumerate(zip(qa_start_logits_argmax, qa_end_logits_argmax))]
         torch.save(model.state_dict(), 'save_model/nsp_qa_lstm/ultimate_nsp_qa_lstm_epoch_%d' % (epoch_size))
+
         print(qa_predict)
         print("结束！！！！！！！！！！！！！！！！")
         sys.exit(0)
-
 
 
 # 进行训练
