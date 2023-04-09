@@ -309,15 +309,15 @@ def evaluate(model, eval_data_loader, epoch, tokenizer):
         qa_start_logits = model_output.qa_start_logits.to("cpu")
         qa_end_logits = model_output.qa_end_logits.to("cpu")
         inputlen = len(tokenizer.convert_ids_to_tokens(encoded_dict['input_ids'][0]))
-        viz.barplot(X=qa_start_logits.view(-1)[:inputlen].tolist(), win="pitcure_4",
+        viz.bar(X=qa_start_logits.view(-1)[:inputlen].tolist(), win="pitcure_4",
                 opts=dict(title='start_word_sorce',
-                          legend=tokenizer.convert_ids_to_tokens(encoded_dict['input_ids'][0]),
+                          rownames=tokenizer.convert_ids_to_tokens(encoded_dict['input_ids'][0]),
                           xlabel='word',
                           ylabel='score',
                           markers=False))
         viz.bar(X=qa_end_logits[:inputlen].tolist(), win="pitcure_5",
                 opts=dict(title='end_word_sorce',
-                          legend=tokenizer.convert_ids_to_tokens(encoded_dict['input_ids'][0]),
+                          rownames=tokenizer.convert_ids_to_tokens(encoded_dict['input_ids'][0]),
                           xlabel='word',
                           ylabel='score',
                           markers=False))
