@@ -1,3 +1,6 @@
+import sys
+
+import numpy as np
 import torch
 import torch
 import torch.nn.functional as F
@@ -8,6 +11,8 @@ from transformers import BertTokenizer, AutoTokenizer
 
 from PraticeOfTransformers.DataCollatorForWholeWordMaskOriginal import DataCollatorForWholeWordMaskOriginal
 
+print(np.random.rand(10, 3))
+sys.exit(0)
 pred = torch.tensor([[0.0,10.0,0.0],[0.0,0.0,10.0]])
 
 target = torch.tensor([1, 2], dtype=torch.long)
