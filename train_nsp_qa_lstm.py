@@ -291,7 +291,7 @@ def evaluate(model, eval_data_loader, epoch, tokenizer):
         X=[(epoch + 1, epoch + 1, epoch + 1)], win="pitcure_2", update='append')
     viz.line(Y=[(eval_em_score / eval_step, eval_f1_score / eval_step)],
              X=[(epoch + 1, epoch + 1)], win="pitcure_3", update='append')
-    if eval_em_score / eval_step >= 74.0:
+    if eval_em_score / eval_step >= 74.2:
     # if eval_em_score / eval_step >= 0.2:
         encoded_dict = tokenizer.batch_encode_plus(
             batch_text_or_text_pairs=list(
@@ -331,7 +331,7 @@ def evaluate(model, eval_data_loader, epoch, tokenizer):
         qa_predict = [Utils.get_all_word(tokenizer, mask_input_ids[index, start:end].numpy().tolist()) for
                       index, (start, end) in enumerate(zip(qa_start_logits_argmax, qa_end_logits_argmax))]
         torch.save(model.state_dict(), 'save_model/nsp_qa_lstm/ultimate_nsp_qa_lstm_epoch_%d' % (epoch_size))
-
+        print(''.join(tokenizer.convert_ids_to_tokens(encoded_dict['input_ids'][0])))
         print(qa_predict)
         print("结束！！！！！！！！！！！！！！！！")
         sys.exit(0)
