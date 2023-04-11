@@ -65,7 +65,7 @@ if len(sys.argv) >= 4:
 # 加载数据集
 nerdataset = Utils.convert_ner_data('data/origin/intercontest/relic_ner_handlewell.json')
 # nerdataset = list(filter(lambda x: ''.join(x[0]).startswith("小双桥遗址"), nerdataset))
-nerdataset = nerdataset[0:100]
+# nerdataset = nerdataset[0:100]
 train_data, dev_data = Data.random_split(nerdataset, [int(len(nerdataset) * 0.9),
                                                       len(nerdataset) - int(
                                                           len(nerdataset) * 0.9)],
