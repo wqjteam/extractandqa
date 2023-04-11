@@ -37,17 +37,18 @@ ner_label_id = {}
 for key in ner_id_label:
     ner_label_id[ner_id_label[key]] = key
 
-id2labelids=[0,1,2,3,4,5,6,7,8,9,10,11,12]
-id2labelvalues=['[CLS]','[SEP]','O','B-ORG','B-PER','B-LOC','B-TIME','B-BOOK','I-ORG','I-PER','I-LOC','I-TIME','I-BOOK']
+id2labelids = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+id2labelvalues = ['[CLS]', '[SEP]', 'O', 'B-ORG', 'B-PER', 'B-LOC', 'B-TIME', 'B-BOOK', 'I-ORG', 'I-PER', 'I-LOC',
+                  'I-TIME', 'I-BOOK']
 model = BertForNerAppendBiLstmAndCrf.from_pretrained(pretrained_model_name_or_path=model_name,
                                                      num_labels=len(ner_label_id))  # num_labels 测试用一下，看看参数是否传递
 # 获取模型路径
 if len(sys.argv) >= 4:
-    print('-------------load para------------------%s--------------'%sys.argv[3])
+    print('-------------load para------------------%s--------------' % sys.argv[3])
     config = AutoConfig.from_pretrained(pretrained_model_name_or_path=model_name, num_labels=len(ner_label_id))
     model = BertForNerAppendBiLstmAndCrf(config)
     # 因为后面的参数没有初始化，所以采用非强制性约束
-    state_dict=torch.load(sys.argv[3])
+    state_dict = torch.load(sys.argv[3])
 
     new_state_dict = OrderedDict()
     for k, v in state_dict.items():  # k为module.xxx.weight, v为权重
@@ -64,7 +65,7 @@ if len(sys.argv) >= 4:
 # 加载数据集
 nerdataset = Utils.convert_ner_data('data/origin/intercontest/relic_ner_handlewell.json')
 # nerdataset = list(filter(lambda x: ''.join(x[0]).startswith("小双桥遗址"), nerdataset))
-# nerdataset=nerdataset[0:100]
+nerdataset = nerdataset[0:100]
 train_data, dev_data = Data.random_split(nerdataset, [int(len(nerdataset) * 0.9),
                                                       len(nerdataset) - int(
                                                           len(nerdataset) * 0.9)],
@@ -89,9 +90,9 @@ if full_fine_tuning:
     no_decay = ['bias', 'LayerNorm.bias', 'LayerNorm.weight']
     optimizer_grouped_parameters = [
         {'params': [p for n, p in bert_optimizer if not any(nd in n for nd in no_decay)],
-         'lr': learning_rate , 'weight_decay': weight_decay},
+         'lr': learning_rate, 'weight_decay': weight_decay},
         {'params': [p for n, p in bert_optimizer if any(nd in n for nd in no_decay)],  # 对于在no_decay 不进行正则化
-         'lr': learning_rate , 'weight_decay': 0.0},
+         'lr': learning_rate, 'weight_decay': 0.0},
         {'params': [p for n, p in lstm_optimizer if not any(nd in n for nd in no_decay)],
          'lr': learning_rate * 100, 'weight_decay': weight_decay},
         {'params': [p for n, p in lstm_optimizer if any(nd in n for nd in no_decay)],
@@ -242,8 +243,8 @@ def evaluate(model, eval_data_loader, epoch):
     # 评估之前将其重置
     eval_total_loss = 0
     eval_step = 0
-    eval_predict=[]
-    eval_target=[]
+    eval_predict = []
+    eval_target = []
     # 依次处理每批数据
     for return_batch_data in eval_data_loader:  # 一个batch一个bach的训练完所有数据
 
@@ -291,8 +292,19 @@ def evaluate(model, eval_data_loader, epoch):
              X=[(epoch + 1, epoch + 1, epoch + 1)], win="pitcure_3", update='append')
     print(metrics.classification_report(eval_predict, eval_target, labels=id2labelids,
                                         target_names=id2labelvalues, digits=3))
-    if model_f1.compute().to('cpu')>=0.749:
-
+    # if model_f1.compute().to('cpu') >= 0:
+    if model_f1.compute().to('cpu') >= 0.749:
+        encode_dict=tokenizer.batch_encode_plus(batch_text_or_text_pairs=['秦鸿钧使用的收发报机在哪里？'], add_special_tokens=True,
+                                    truncation=True)
+        input_ids = encode_dict['input_ids']
+        token_type_ids = encode_dict['token_type_ids']
+        # labels = encode_dict['labels']
+        _,logits = model(torch.tensor(input_ids).to(device), token_type_ids=torch.tensor(token_type_ids).to(device), is_test=True,
+                         labels=torch.ones_like(torch.tensor(input_ids)).to(device) )
+        predict = logits.view(-1, logits.shape[2])[0].cpu().tolist()
+        print("结果输出")
+        for tp in zip('秦鸿钧使用的收发报机在哪里？',predict):
+            print(tp[0]+'-'+ner_id_label[tp[1]])
         torch.save(model.state_dict(), 'save_model/ner/ultimate_dict_ner_epoch_%d' % (epoch_size))
         torch.save(model, 'save_model/ner/ultimate_wholemodel_ner_epoch_%d' % (epoch_size))
         print("ner训练达到目的结束了")
@@ -301,6 +313,7 @@ def evaluate(model, eval_data_loader, epoch):
     model_precision.reset()
     model_recall.reset()
     model_f1.reset()
+
 
 for epoch in range(epoch_size):  # 所有数据迭代总的次数
 
