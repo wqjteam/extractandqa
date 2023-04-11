@@ -292,9 +292,12 @@ def evaluate(model, eval_data_loader, epoch):
     print(metrics.classification_report(eval_predict, eval_target, labels=id2labelids,
                                         target_names=id2labelvalues, digits=3))
     if model_f1.compute().to('cpu')>=0.749:
+
         torch.save(model.state_dict(), 'save_model/ner/ultimate_dict_ner_epoch_%d' % (epoch_size))
         torch.save(model, 'save_model/ner/ultimate_wholemodel_ner_epoch_%d' % (epoch_size))
+        print("ner训练达到目的结束了")
         sys.exit(0)
+
     model_precision.reset()
     model_recall.reset()
     model_f1.reset()
