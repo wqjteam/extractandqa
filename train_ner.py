@@ -303,7 +303,7 @@ def evaluate(model, eval_data_loader, epoch):
                          labels=torch.ones_like(torch.tensor(input_ids)).to(device) )
         predict = logits.view(-1, logits.shape[2])[0].cpu().tolist()
         print("结果输出")
-        for tp in zip('秦鸿钧使用的收发报机在哪里？',predict):
+        for tp in zip(tokenizer.convert_ids_to_tokens(encode_dict['input_ids'][0]),predict):
             print(tp[0]+'-'+ner_id_label[tp[1]])
         torch.save(model.state_dict(), 'save_model/ner/ultimate_dict_ner_epoch_%d' % (epoch_size))
         torch.save(model, 'save_model/ner/ultimate_wholemodel_ner_epoch_%d' % (epoch_size))
