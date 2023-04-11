@@ -328,7 +328,7 @@ def evaluate(model, eval_data_loader, epoch, tokenizer):
 
         qa_start_logits_argmax = torch.argmax(qa_start_logits, dim=1)
         qa_end_logits_argmax = torch.argmax(qa_end_logits, dim=1)
-        qa_predict = [Utils.get_all_word(tokenizer, encoded_dict['input_ids'][0][index, start:end].numpy().tolist()) for
+        qa_predict = [Utils.get_all_word(tokenizer, torch.tensor(encoded_dict['input_ids'])[index, start:end].numpy().tolist()) for
                       index, (start, end) in enumerate(zip(qa_start_logits_argmax, qa_end_logits_argmax))]
         torch.save(model.state_dict(), 'save_model/nsp_qa_lstm/ultimate_nsp_qa_lstm_epoch_%d' % (epoch_size))
         print(''.join(tokenizer.convert_ids_to_tokens(encoded_dict['input_ids'][0])))
