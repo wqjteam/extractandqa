@@ -293,7 +293,7 @@ def evaluate(model, eval_data_loader, epoch):
     print(metrics.classification_report(eval_predict, eval_target, labels=id2labelids,
                                         target_names=id2labelvalues, digits=3))
     # if model_f1.compute().to('cpu') >= 0:
-    if model_f1.compute().to('cpu') >= 0.749:
+    if model_f1.compute().to('cpu') >= 0.83:
         encode_dict=tokenizer.batch_encode_plus(batch_text_or_text_pairs=['秦鸿钧使用的收发报机在哪里？'], add_special_tokens=True,
                                     truncation=True)
         input_ids = encode_dict['input_ids']
@@ -306,7 +306,7 @@ def evaluate(model, eval_data_loader, epoch):
         for tp in zip(tokenizer.convert_ids_to_tokens(encode_dict['input_ids'][0]),predict):
             print(tp[0]+'-'+ner_id_label[tp[1]])
         torch.save(model.state_dict(), 'save_model/ner/ultimate_dict_ner_epoch_%d' % (epoch_size))
-        torch.save(model, 'save_model/ner/ultimate_wholemodel_ner_epoch_%d' % (epoch_size))
+        torch.save(model, 'save_model/ner/ultimate_wholemodel_ner_epoch_%d.bin' % (epoch_size))
         print("ner训练达到目的结束了")
         sys.exit(0)
 
