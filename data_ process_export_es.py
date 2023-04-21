@@ -47,7 +47,7 @@ def write_to_es():
     for index, row in union_pd.iterrows():
         # day = datetime.datetime.strftime(row[0], '%Y-%m-%d')
         action = {
-            "_index": 'pass_flow_index',
+            "_index": 'culture_heritage',
             "_id": row[1],
             "_source": {
                 "info": row[0],
@@ -59,6 +59,14 @@ def write_to_es():
     helpers.bulk(es, actions)
 
 
-write_to_es()
-
-print(union_pd.head(10))
+#write_to_es()
+body = {
+    "query":{
+        "match_all":{}
+    }
+}
+# es.delete(index='culture_heritage',id="")
+# res = es.indices.delete('culture_heritage')  # 删除索引
+# es.search(index="culture_heritage" ,body=body)
+# print(es.search(index="culture_heritage" ,body=body))
+print(es.count(index="culture_heritage"))
