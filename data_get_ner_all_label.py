@@ -3,6 +3,8 @@ import os
 import sys
 from collections import OrderedDict
 from functools import partial
+
+import pandas as pd
 from sklearn import metrics
 import numpy as np
 import torch
@@ -52,6 +54,18 @@ nerdataset = Utils.convert_ner_data('data/origin/intercontest/relic_ner_handlewe
 for data in nerdataset:
     for label in data[1]:
         if label.startswith('B'):
-            key_nums[label]=key_nums[label]+1
+            key_nums[label] = key_nums[label] + 1
 
 print(key_nums)
+
+data = pd.read_json("data/origin/intercontest/passage_qa_keyword.json", orient='records', lines=True)
+
+special_nums = 0
+
+for i_item, j_item in data.iterrows():
+    if len(j_item['keyword']) > 1:
+        print(j_item['keyword'])
+    else:
+        special_nums = special_nums + 1
+
+print(special_nums)
