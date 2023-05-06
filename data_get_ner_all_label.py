@@ -44,7 +44,7 @@ id2labelvalues = ['[CLS]', '[SEP]', 'O', 'B-ORG', 'B-PER', 'B-LOC', 'B-TIME', 'B
                   'I-TIME', 'I-BOOK']
 
 key_nums = {
-    'B-ORG': 0, 'B-PER': 0, 'B-LOC': 0, 'B-TIME': 0, 'B-BOOK': 0
+    'B-ORG': 0, 'B-PER': 0, 'B-LOC': 0, 'B-TIME': 0, 'B-BOOK': 0,'O':0
 }
 
 # 加载数据集
@@ -53,7 +53,7 @@ nerdataset = Utils.convert_ner_data('data/origin/intercontest/relic_ner_handlewe
 # nerdataset = nerdataset[0:100]
 for data in nerdataset:
     for label in data[1]:
-        if label.startswith('B'):
+        if label.startswith('B') or label.startswith('O'):
             key_nums[label] = key_nums[label] + 1
 
 print(key_nums)
@@ -61,11 +61,12 @@ print(key_nums)
 data = pd.read_json("data/origin/intercontest/passage_qa_keyword.json", orient='records', lines=True)
 
 special_nums = 0
-
+special_nums_length=0
 for i_item, j_item in data.iterrows():
     if len(j_item['keyword']) > 1:
         print(j_item['keyword'])
     else:
         special_nums = special_nums + 1
-
+        special_nums_length+=len(j_item['keyword'][0])
 print(special_nums)
+print(special_nums_length/special_nums)

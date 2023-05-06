@@ -49,6 +49,8 @@ passage_keyword_json = passage_keyword_json[passage_keyword_json['nsp'].apply(la
 
 passage_keyword_json = passage_keyword_json[passage_keyword_json['q_a'].apply(lambda x: len(x) >= 1)]
 
+
+
 # passage_keyword_json = passage_keyword_json[passage_keyword_json.nsp == 1]
 # passage_keyword_json = passage_keyword_json[passage_keyword_json['sentence'].apply(lambda x: '长治市博物馆，' in x)]
 
@@ -73,9 +75,12 @@ nsp_label_id = {True: 1, False: 0}
 
 def create_batch(data):
     text, question_answer, keyword, nsp = zip(*data)  # arrat的四列 转为tuple
-    text = list(text)  # tuple 转为 list0
+
     questions = [q_a.get('question') for q_a in question_answer]
     answers = [q_a.get('answer') for q_a in question_answer]
+    returnpassages=[]
+    returnquestion=[]
+    returnanswer = []
     nsps = list(nsp)  # tuple 转为list
 
     keywords = [kw[0] for kw in keyword]  # tuple 转为list 变成了双重的list 还是遍历转
@@ -83,15 +88,18 @@ def create_batch(data):
     start_positions_labels = []  # 记录起始位置 需要在进行encode之后再进行添加
     end_positions_labels = []  # 记录终止始位置 需要在进行encode之后再进行添加
 
-    for array_index, textstr in enumerate(text):
+    for array_index, textstr in enumerate(list(text)):
         question=questions[array_index]
         answer=answers[array_index]
         start_in = CommonUtil.get_first_index_in_array(textstr, answer)  # 这方法在data_collator存在，不再重复写了
         if start_in != -1 and nsps[array_index] == 1:  # 判断是否存在
+            returnpassages.append(textstr)
+            returnquestion.append(question)
             nsp_labels.append(nsp_label_id.get(True))
-            start_positions_labels.append(start_in)  # 因为在tokenizer.batch_encode_plus中转换的时候添加了cls
-            end_positions_labels.append(start_in + len(answers[array_index]))
-            print(start_in)
+            returnanswer.append({"answer": answer,"start":start_in,"end":start_in + len(answer)})
+
+
+            print(textstr[start_in:start_in + len(answer)])
         else:
             pass
             # nsp_labels.append(nsp_label_id.get(False))
@@ -99,11 +107,11 @@ def create_batch(data):
             # sep_in = textstr.index(0)
             # start_positions_labels.append(sep_in)
             # end_positions_labels.append(sep_in)
-    return text,questions,answers
+    return zip(returnpassages,returnquestion,returnanswer)
 
 
 
 # batch_size 除以2是为了 在后面认为添加了负样本   负样本和正样本是1：1
-text,questions,answers=create_batch(passage_keyword_json)
-
-print(text)
+q_a=create_batch(passage_keyword_json)
+for qa in q_a:
+    print(qa)
