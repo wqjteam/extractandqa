@@ -290,8 +290,12 @@ def evaluate(model, eval_data_loader, epoch):
     viz.line(Y=[eval_total_loss / eval_step], X=[epoch + 1], win="pitcure_2", update='append')
     viz.line(Y=[(model_precision.compute().to('cpu'), model_recall.compute().to('cpu'), model_f1.compute().to('cpu'))],
              X=[(epoch + 1, epoch + 1, epoch + 1)], win="pitcure_3", update='append')
+    print("-------------class_report------------------")
     print(metrics.classification_report(eval_predict, eval_target, labels=id2labelids,
                                         target_names=id2labelvalues, digits=3))
+    print("-------------f1_report------------------")
+    print(metrics.f1_score(eval_predict, eval_target, labels=id2labelids, average=None))
+
     # if model_f1.compute().to('cpu') >= 0:
     if model_f1.compute().to('cpu') >= 0.83:
         encode_dict=tokenizer.batch_encode_plus(batch_text_or_text_pairs=['秦鸿钧使用的收发报机在哪里？'], add_special_tokens=True,
