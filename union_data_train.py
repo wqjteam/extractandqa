@@ -3,14 +3,12 @@
 import json
 import random
 
-
 import pandas as pd
 import numpy as np
 
 from sqlalchemy import create_engine
 from sqlalchemy.dialects.mysql import pymysql
 
+cmrcdata = pd.read_json('./data/origin/cmrc/cmrc2018_trial.json')
 
-
-cmrcdata=pd.read_json('./data/origin/cmrc/cmrc2018_trial.json')
-cmrcdata
+cmrcdata['data'].apply(lambda x: x.get('paragraphs'))
