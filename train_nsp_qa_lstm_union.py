@@ -15,6 +15,7 @@ from transformers import AutoTokenizer, AutoConfig, get_cosine_schedule_with_war
 from visdom import Visdom
 
 import CommonUtil
+import data_get_qa_all_label
 from PraticeOfTransformers import Utils
 from PraticeOfTransformers.CustomModelForNSPQABILSTM import CustomModelForNSPQABILSTM
 
@@ -54,10 +55,11 @@ else:
 '''
 获取数据
 '''
-passage_keyword_json = pd.read_json("./data/origin/intercontest/union_culture_kiwi_qa_error_postivate.json", orient='records',
-                                    lines=True).drop("spos", axis=1)
-# passage_keyword_json['q_a'] 和 passage_keyword_json['q_a'].q_a 一样
-passage_keyword_json = passage_keyword_json[passage_keyword_json['q_a'].apply(lambda x: len(x) >= 1)]
+train_data = pd.read_json("./data/origin/intercontest/union_culture_kiwi_qa_error_postivate.json", orient='records',
+                                    lines=True)
+dev_data=data_get_qa_all_label.get_organize_data_bywiki('./data/origin/cmrc2018_dev.json')
+test_data=data_get_qa_all_label.get_organize_data_bywiki('./data/origin/cmrc2018_trial.json')
+passage_keyword_json = train_data[train_data['q_a'].apply(lambda x: len(x) >= 1)]
 
 # passage_keyword_json = passage_keyword_json[passage_keyword_json.nsp == 1]
 # passage_keyword_json = passage_keyword_json[passage_keyword_json['sentence'].apply(lambda x: '长治市博物馆，' in x)]
