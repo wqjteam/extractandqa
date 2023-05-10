@@ -55,23 +55,94 @@ else:
 '''
 获取数据
 '''
-train_data = pd.read_json("./data/origin/intercontest/union_culture_kiwi_qa_error_postivate.json", orient='records',
-                                    lines=True)
-dev_data=data_get_qa_all_label.get_organize_data_bywiki('./data/origin/cmrc2018_dev.json')
-test_data=data_get_qa_all_label.get_organize_data_bywiki('./data/origin/cmrc2018_trial.json')
-passage_keyword_json = train_data[train_data['q_a'].apply(lambda x: len(x) >= 1)]
+train_data = pd.read_json("./data/origin/intercontest/union_culture_kiwi_qa_error_postivate_train.json",
+                          orient='records',
+                          lines=True)
+dev_data = pd.read_json("./data/origin/intercontest/union_culture_kiwi_qa_error_postivate_dev.json", orient='records',
+                        lines=True)
+test_data = pd.read_json("./data/origin/intercontest/union_culture_kiwi_qa_error_postivate_test.json", orient='records',
+                         lines=True)
+train_data = train_data[train_data['q_a'].apply(lambda x: len(x) >= 1)]
+
 
 # passage_keyword_json = passage_keyword_json[passage_keyword_json.nsp == 1]
 # passage_keyword_json = passage_keyword_json[passage_keyword_json['sentence'].apply(lambda x: '长治市博物馆，' in x)]
 # passage_keyword_json = passage_keyword_json[:10]
-passage_keyword_json = passage_keyword_json.explode("q_a").values
 
 
+def tokenize_and_align_labels(data, tokenizer):
+    _, text, q_a, nsp = zip(*data)  # arrat的四列 转为tuple
+    textarray=[]
+    for data in text:
+        if len(data) > 512 - 3 - 30:  # 给问题留30个字
+            textarray.append(list(data[:512 - 3 - 30]))
+        else:
+            textarray.append(list(data))
+    # text = [list(data) for data in text]  # tuple 转为 list0
+    questions = [list(qa.get('question')) for qa in q_a]
+    answers = [qa.get('answer').get('text') for qa in q_a]
+    answers_index = [(qa.get('answer').get('start'), qa.get('answer').get('end')) for qa in q_a]
+    nsps = list(nsp)  # tuple 转为list
 
-train_data, dev_data = Data.random_split(passage_keyword_json, [int(len(passage_keyword_json) * 0.9),
-                                                                len(passage_keyword_json) - int(
-                                                                    len(passage_keyword_json) * 0.9)],
-                                         generator=torch.Generator().manual_seed(0))
+    nsp_labels = []  # 用作判断两句是否相关
+    start_positions_labels = []  # 记录起始位置 需要在进行encode之后再进行添加
+    end_positions_labels = []  # 记录终止始位置 需要在进行encode之后再进行添加
+
+    '''
+    bert是双向的encode 所以qestion和text放在前面和后面区别不大
+    '''
+
+    encoded_dict_textandquestion = tokenizer.batch_encode_plus(
+        batch_text_or_text_pairs=list(zip(textarray, questions)),  # 输入文本对 # 输入文本,采用list[tuple(text,question)]的方式进行输入
+        add_special_tokens=True,  # 添加 '[CLS]' 和 '[SEP]'
+        max_length=512,  # 填充 & 截断长度
+        truncation=True,
+        padding='longest',
+        return_attention_mask=True,  # 返回 attn. masks.
+        is_split_into_words=True
+    )
+
+    for index in range(len(textarray)):
+        # 获取subtokens位置
+        passage_len = len(textarray[index])
+        start_index, end_index = answers_index[index]
+        true_start_index = -1
+        true_end_index = -1
+        word_ids = encoded_dict_textandquestion.word_ids(batch_index=index)
+        previous_word_idx = -1
+        label_ids = []
+        true_index = -1
+        '''
+        如果nsp是0的话，代表代表没有答案
+        '''
+        if nsps[index] == 0 or start_index > passage_len or end_index > passage_len:
+            position_index = passage_len + 1
+            answers_index[index] = (position_index, position_index)
+            continue
+        # 遍历subtokens位置索引
+        for word_index, word_idx in enumerate(word_ids):
+            if word_idx is None or word_idx == previous_word_idx:
+                pass
+                # We set the label for the first token of each word.
+            elif word_idx != previous_word_idx:
+                true_index += 1
+                if true_index == start_index:
+
+                    true_start_index = word_index
+                elif true_index == end_index:
+
+                    true_end_index = word_index
+            if true_end_index != -1:
+                answers_index[index] = (true_start_index, true_end_index)
+                break
+            previous_word_idx = word_idx
+
+    return encoded_dict_textandquestion, answers_index
+
+
+train_data = train_data.explode("q_a").values
+dev_data = dev_data.explode("q_a").values
+test_data = test_data.explode("q_a").values
 
 nsp_id_label = {1: True, 0: False}
 
@@ -121,66 +192,29 @@ scheduler = get_cosine_schedule_with_warmup(optim,
                                             num_training_steps=epoch_size * train_steps_per_epoch)
 
 
-def create_batch(data, tokenizer, keyword_flag=False):
-    text, question_answer, keyword, nsp = zip(*data)  # arrat的四列 转为tuple
+def create_batch(data, tokenizer):
+    _, text, q_a, nsp = zip(*data)  # arrat的四列 转为tuple
     text = list(text)  # tuple 转为 list0
-    questions = [q_a.get('question') for q_a in question_answer]
-    answers = [q_a.get('answer') for q_a in question_answer]
+    questions = [qa.get('question') for qa in q_a]
+    answers = [qa.get('answer').get('text') for qa in q_a]
+    source_answers_index = [(qa.get('answer').get('start'), qa.get('answer').get('end')) for qa in q_a]
+    text_qa_tokens, answers_index = tokenize_and_align_labels(data, tokenizer)
     nsps = list(nsp)  # tuple 转为list
 
     nsp_labels = []  # 用作判断两句是否相关
     start_positions_labels = []  # 记录起始位置 需要在进行encode之后再进行添加
     end_positions_labels = []  # 记录终止始位置 需要在进行encode之后再进行添加
 
-    '''
-    bert是双向的encode 所以qestion和text放在前面和后面区别不大
-    '''
-
-    encoded_dict_textandquestion = tokenizer.batch_encode_plus(
-        batch_text_or_text_pairs=list(zip(text, questions)),  # 输入文本对 # 输入文本,采用list[tuple(text,question)]的方式进行输入
-        add_special_tokens=True,  # 添加 '[CLS]' 和 '[SEP]'
-        max_length=512,  # 填充 & 截断长度
-        truncation=True,
-        padding='longest',
-        return_attention_mask=True,  # 返回 attn. masks.
-    )
-
-    '''
-    处理qa的问题
-    '''
-    encoded_dict_answers = tokenizer.batch_encode_plus(batch_text_or_text_pairs=answers,
-                                                       add_special_tokens=False,  # 添加 '[CLS]' 和 '[SEP]'
-                                                       pad_to_max_length=False,
-                                                       return_attention_mask=False
-                                                       )
-
-    for array_index, textstr in enumerate(encoded_dict_textandquestion['input_ids']):
-
-        start_in = CommonUtil.get_first_index_in_array(textstr, encoded_dict_answers['input_ids'][
-            array_index])  # 这方法在data_collator存在，不再重复写了
-        if start_in != -1 and nsps[array_index] == 1:  # 判断是否存在
-            nsp_labels.append(nsp_label_id.get(True))
-            start_positions_labels.append(start_in)  # 因为在tokenizer.batch_encode_plus中转换的时候添加了cls
-            end_positions_labels.append(start_in + 1 + len(answers[array_index]))
-        else:
-            nsp_labels.append(nsp_label_id.get(False))
-            # 若找不到，则将start得位置 放在最末尾的位置 padding 或者 [SEP]
-
-            # 应该是len(textstr) -1得 但是因为在tokenizer.batch_encode_plus中转换的时候添加了cls 所以就是len(textstr) -1 +1
-            sep_in = textstr.index(tokenizer.encode(text='[SEP]', add_special_tokens=False)[0])
-            start_positions_labels.append(sep_in)
-            end_positions_labels.append(sep_in)
-
+    aa = list(zip(*answers_index))
     # mask_input_labels 位置用torch.tensor(encoded_dict_textandquestion['input_ids'])代替了，这里不计算mlm的loss了
-    return torch.tensor(encoded_dict_textandquestion['input_ids']), torch.tensor(
-        encoded_dict_textandquestion['attention_mask']), \
-           torch.tensor(encoded_dict_textandquestion['token_type_ids']), torch.tensor(nsp_labels), torch.tensor(
-        start_positions_labels), torch.tensor(end_positions_labels)
+    return torch.tensor(text_qa_tokens['input_ids']), torch.tensor(
+        text_qa_tokens['attention_mask']), \
+           torch.tensor(text_qa_tokens['token_type_ids']), torch.tensor(nsps), torch.tensor(
+        list(zip(*answers_index))[0]), torch.tensor(list(zip(*answers_index))[1])
 
 
 # 把一些参数固定
-create_batch_partial = partial(create_batch, tokenizer=tokenizer,
-                               keyword_flag=keyword_flag)
+create_batch_partial = partial(create_batch, tokenizer=tokenizer)
 
 # batch_size 除以2是为了 在后面认为添加了负样本   负样本和正样本是1：1
 train_dataloader = Data.DataLoader(
@@ -188,7 +222,11 @@ train_dataloader = Data.DataLoader(
 )
 
 dev_dataloader = Data.DataLoader(
-    dev_data, shuffle=False, collate_fn=create_batch_partial, batch_size=batch_size
+    dev_data, shuffle=True, collate_fn=create_batch_partial, batch_size=batch_size
+)
+
+test_dataloader = Data.DataLoader(
+    test_data, shuffle=True, collate_fn=create_batch_partial, batch_size=batch_size
 )
 
 # 看是否用cpu或者gpu训练
@@ -294,7 +332,7 @@ def evaluate(model, eval_data_loader, epoch, tokenizer):
     viz.line(Y=[(eval_em_score / eval_step, eval_f1_score / eval_step)],
              X=[(epoch + 1, epoch + 1)], win="pitcure_3", update='append')
     if eval_em_score / eval_step >= 74.3:
-    # if eval_em_score / eval_step >= 0.2:
+        # if eval_em_score / eval_step >= 0.2:
         encoded_dict = tokenizer.batch_encode_plus(
             batch_text_or_text_pairs=list(
                 zip(["春秋版画博物馆是坐落于北京的一所主要藏品为版画的博物馆。"], ["春秋版画博物馆在哪里？"])),
@@ -311,7 +349,8 @@ def evaluate(model, eval_data_loader, epoch, tokenizer):
         qa_start_logits = model_output.qa_start_logits.to("cpu")
         qa_end_logits = model_output.qa_end_logits.to("cpu")
         inputlen = len(tokenizer.convert_ids_to_tokens(encoded_dict['input_ids'][0]))
-        rownames=[str(index)+'-'+data for index,data in enumerate( tokenizer.convert_ids_to_tokens(encoded_dict['input_ids'][0]))]
+        rownames = [str(index) + '-' + data for index, data in
+                    enumerate(tokenizer.convert_ids_to_tokens(encoded_dict['input_ids'][0]))]
 
         viz.bar(X=qa_start_logits.view(-1)[:inputlen].tolist(), win="pitcure_4",
                 opts=dict(title='start_word_sorce',
@@ -330,8 +369,10 @@ def evaluate(model, eval_data_loader, epoch, tokenizer):
 
         qa_start_logits_argmax = torch.argmax(qa_start_logits, dim=1)
         qa_end_logits_argmax = torch.argmax(qa_end_logits, dim=1)
-        qa_predict = [Utils.get_all_word(tokenizer, torch.tensor(encoded_dict['input_ids'])[index, start:end].numpy().tolist()) for
-                      index, (start, end) in enumerate(zip(qa_start_logits_argmax, qa_end_logits_argmax))]
+        qa_predict = [
+            Utils.get_all_word(tokenizer, torch.tensor(encoded_dict['input_ids'])[index, start:end].numpy().tolist())
+            for
+            index, (start, end) in enumerate(zip(qa_start_logits_argmax, qa_end_logits_argmax))]
         torch.save(model.state_dict(), 'save_model/nsp_qa_lstm/ultimate_nsp_qa_lstm_epoch_%d' % (epoch_size))
         print(''.join(tokenizer.convert_ids_to_tokens(encoded_dict['input_ids'][0])))
         print(qa_predict)
@@ -411,4 +452,3 @@ for epoch in range(epoch_size):  # 所有数据迭代总的次数
 
 # 最后保存一下
 torch.save(model.state_dict(), 'save_model/nsp_qa_lstm/nsp_qa_lstm_epoch_%d' % (epoch_size))
-
