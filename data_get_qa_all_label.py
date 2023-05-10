@@ -30,11 +30,6 @@ learning_rate = 1e-5
 weight_decay = 0.01  # 最终目的是防止过拟合
 full_fine_tuning = True
 
-print('--------------------sys.argv:%s-------------------' % (','.join(sys.argv)))
-if len(sys.argv) >= 2:
-    batch_size = int(sys.argv[1])
-if len(sys.argv) >= 3:
-    epoch_size = int(sys.argv[2])
 
 '''
 获取数据
@@ -161,8 +156,8 @@ cmrcdata['q_a'] = cmrcdata['q_a'].map(orgnize_answer)
 cmrcdata = cmrcdata.drop(['version', 'data'], axis=1)
 
 union_qa_data = pd.concat([q_a, cmrcdata], axis=0)
-union_qa_data.to_json('data/origin/intercontest/union_qa_positive_negate.json', force_ascii=False, orient='records',
-                      lines=True)
+# union_qa_data.to_json('data/origin/intercontest/union_qa_positive_negate.json', force_ascii=False, orient='records',
+#                       lines=True)
 default_df = union_qa_data.copy(deep=True)
 default_df['nsp'] = default_df['q_a'].map(lambda x: 1)
 union_qa_data = union_qa_data.reset_index()
@@ -188,10 +183,10 @@ union_qa_data[['q_a', 'nsp']] = union_qa_data.apply(lambda row: match_error_mult
 union_qa_error_postivate = pd.concat([default_df, union_qa_data.drop(['index', 'new_temp_index'], axis=1)], axis=0)
 
 union_qa_error_postivate = union_qa_error_postivate.sample(frac=1)  # 乱序处理
-union_qa_error_postivate.to_json('data/origin/intercontest/union_culture_kiwi_qa_error_postivate.json', force_ascii=False,orient='records', lines=True)
-passage_keyword_json = pd.read_json("./data/origin/intercontest/union_culture_kiwi_qa_error_postivate.json",
-                                    orient='records',
-                                    lines=True).head(100)
+# union_qa_error_postivate.to_json('data/origin/intercontest/union_culture_kiwi_qa_error_postivate.json', force_ascii=False,orient='records', lines=True)
+# passage_keyword_json = pd.read_json("./data/origin/intercontest/union_culture_kiwi_qa_error_postivate.json",
+#                                     orient='records',
+#                                     lines=True).head(100)
 
 
 def get_organize_data_bywiki(filepath):
