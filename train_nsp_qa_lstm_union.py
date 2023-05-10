@@ -62,17 +62,16 @@ dev_data = pd.read_json("./data/origin/intercontest/union_culture_kiwi_qa_error_
                         lines=True)
 test_data = pd.read_json("./data/origin/intercontest/union_culture_kiwi_qa_error_postivate_test.json", orient='records',
                          lines=True)
-train_data = train_data[train_data['nsp'].apply(lambda x: x==0)]
-
-
-
-train_data = train_data[train_data['passage'].apply(lambda x: x.startswith('J Storm') )]
+# train_data = train_data[train_data['nsp'].apply(lambda x: x == 0)]
+#
+# train_data = train_data[train_data['passage'].apply(lambda x: x.startswith('J Storm'))]
 # passage_keyword_json = passage_keyword_json[:10]
+# print(111)
 
 
 def tokenize_and_align_labels(data, tokenizer):
-    _, text, q_a, nsp = zip(*data)  # arrat的四列 转为tuple
-    textarray=[]
+    index_list, text, q_a, nsp = zip(*data)  # arrat的四列 转为tuple
+    textarray = []
     for data in text:
         if len(data) > 512 - 3 - 30:  # 给问题留30个字
             textarray.append(list(data[:512 - 3 - 30]))
@@ -81,7 +80,7 @@ def tokenize_and_align_labels(data, tokenizer):
     # text = [list(data) for data in text]  # tuple 转为 list0
     questions = [list(qa.get('question')) for qa in q_a]
     answers = [qa.get('answer').get('text') for qa in q_a]
-    answers_index = [(qa.get('answer').get('start'), qa.get('answer').get('end')) for qa in q_a]
+    token_answers_index = [(qa.get('answer').get('start'), qa.get('answer').get('end')) for qa in q_a]
     nsps = list(nsp)  # tuple 转为list
 
     nsp_labels = []  # 用作判断两句是否相关
@@ -91,7 +90,7 @@ def tokenize_and_align_labels(data, tokenizer):
     '''
     bert是双向的encode 所以qestion和text放在前面和后面区别不大
     '''
-
+    # tokenizer.tokenize(textarray[0])
     encoded_dict_textandquestion = tokenizer.batch_encode_plus(
         batch_text_or_text_pairs=list(zip(textarray, questions)),  # 输入文本对 # 输入文本,采用list[tuple(text,question)]的方式进行输入
         add_special_tokens=True,  # 添加 '[CLS]' 和 '[SEP]'
@@ -101,11 +100,14 @@ def tokenize_and_align_labels(data, tokenizer):
         return_attention_mask=True,  # 返回 attn. masks.
         is_split_into_words=True
     )
-
+    # print(len(textarray[0]))
+    # print(textarray[0][:10])
+    # print(len(textarray[0])+len(questions[0]))
+    # print(len(encoded_dict_textandquestion['input_ids'][0]))
     for index in range(len(textarray)):
         # 获取subtokens位置
         passage_len = len(textarray[index])
-        start_index, end_index = answers_index[index]
+        start_index, end_index = token_answers_index[index]
         true_start_index = -1
         true_end_index = -1
         word_ids = encoded_dict_textandquestion.word_ids(batch_index=index)
@@ -116,8 +118,8 @@ def tokenize_and_align_labels(data, tokenizer):
         如果nsp是0的话，代表代表没有答案
         '''
         if nsps[index] == 0 or start_index > passage_len or end_index > passage_len:
-            position_index = passage_len + 1
-            answers_index[index] = (position_index, position_index)
+            seqindex = encoded_dict_textandquestion['input_ids'][index].index(102)  # ['SEP']
+            token_answers_index[index] = (seqindex, seqindex)
             continue
         # 遍历subtokens位置索引
         for word_index, word_idx in enumerate(word_ids):
@@ -133,17 +135,24 @@ def tokenize_and_align_labels(data, tokenizer):
 
                     true_end_index = word_index
             if true_end_index != -1:
-                answers_index[index] = (true_start_index, true_end_index)
+                token_answers_index[index] = (true_start_index, true_end_index)
                 break
             previous_word_idx = word_idx
+    returndata = []
+    for rdata in zip(list(index_list), textarray, encoded_dict_textandquestion['input_ids'],
+                     encoded_dict_textandquestion['attention_mask']
+            , encoded_dict_textandquestion['token_type_ids'], questions, answers,
+                     token_answers_index, nsps):
+        returndata.append(list(rdata))
+    return returndata
 
-    return encoded_dict_textandquestion, answers_index
 
-
-train_data = train_data.explode("q_a").values
-dev_data = dev_data.explode("q_a").values
-test_data = test_data.explode("q_a").values
-
+train_data = tokenize_and_align_labels(train_data.explode("q_a").values, tokenizer)
+dev_data = tokenize_and_align_labels(dev_data.explode("q_a").values, tokenizer)
+test_data = tokenize_and_align_labels(test_data.explode("q_a").values, tokenizer)
+train_data=train_data[0:2]
+dev_data=dev_data[0:2]
+test_data=test_data[0:2]
 nsp_id_label = {1: True, 0: False}
 
 nsp_label_id = {True: 1, False: 0}
@@ -186,31 +195,19 @@ else:
     param_optimizer = list(model.classifier.named_parameters())
     optimizer_grouped_parameters = [{'params': [p for n, p in param_optimizer]}]
 optim = AdamW(optimizer_grouped_parameters, lr=learning_rate)
-train_steps_per_epoch = len(train_data) // batch_size
+train_steps_per_epoch = len(list(train_data)) // batch_size
 scheduler = get_cosine_schedule_with_warmup(optim,
                                             num_warmup_steps=(epoch_size // 10) * train_steps_per_epoch,
                                             num_training_steps=epoch_size * train_steps_per_epoch)
 
 
 def create_batch(data, tokenizer):
-    _, text, q_a, nsp = zip(*data)  # arrat的四列 转为tuple
-    text = list(text)  # tuple 转为 list0
-    questions = [qa.get('question') for qa in q_a]
-    answers = [qa.get('answer').get('text') for qa in q_a]
-    source_answers_index = [(qa.get('answer').get('start'), qa.get('answer').get('end')) for qa in q_a]
-    text_qa_tokens, answers_index = tokenize_and_align_labels(data, tokenizer)
-    nsps = list(nsp)  # tuple 转为list
+    _, text, input_ids, attention_mask, token_type_ids, questions, answers, answers_index, nsps = zip(
+        *data)  # arrat的四列 转为tuple
 
-    nsp_labels = []  # 用作判断两句是否相关
-    start_positions_labels = []  # 记录起始位置 需要在进行encode之后再进行添加
-    end_positions_labels = []  # 记录终止始位置 需要在进行encode之后再进行添加
-
-    aa = list(zip(*answers_index))
     # mask_input_labels 位置用torch.tensor(encoded_dict_textandquestion['input_ids'])代替了，这里不计算mlm的loss了
-    return torch.tensor(text_qa_tokens['input_ids']), torch.tensor(
-        text_qa_tokens['attention_mask']), \
-           torch.tensor(text_qa_tokens['token_type_ids']), torch.tensor(nsps), torch.tensor(
-        list(zip(*answers_index))[0]), torch.tensor(list(zip(*answers_index))[1])
+    return torch.tensor(list(input_ids)), torch.tensor(
+        list(attention_mask)), torch.tensor(list(token_type_ids)), torch.tensor(list(nsps)), torch.tensor(list(zip(*answers_index))[0]), torch.tensor(list(zip(*answers_index))[1])
 
 
 # 把一些参数固定
@@ -331,7 +328,7 @@ def evaluate(model, eval_data_loader, epoch, tokenizer):
         X=[(epoch + 1, epoch + 1, epoch + 1)], win="pitcure_2", update='append')
     viz.line(Y=[(eval_em_score / eval_step, eval_f1_score / eval_step)],
              X=[(epoch + 1, epoch + 1)], win="pitcure_3", update='append')
-    if eval_em_score / eval_step >= 74.3:
+    if eval_em_score / eval_step >= 0.1:
         # if eval_em_score / eval_step >= 0.2:
         encoded_dict = tokenizer.batch_encode_plus(
             batch_text_or_text_pairs=list(
@@ -373,7 +370,7 @@ def evaluate(model, eval_data_loader, epoch, tokenizer):
             Utils.get_all_word(tokenizer, torch.tensor(encoded_dict['input_ids'])[index, start:end].numpy().tolist())
             for
             index, (start, end) in enumerate(zip(qa_start_logits_argmax, qa_end_logits_argmax))]
-        torch.save(model.state_dict(), 'save_model/nsp_qa_lstm/ultimate_nsp_qa_lstm_epoch_%d' % (epoch_size))
+        torch.save(model.state_dict(), 'save_model/nsp_qa_lstm_union/ultimate_nsp_qa_lstm_epoch_%d' % (epoch_size))
         print(''.join(tokenizer.convert_ids_to_tokens(encoded_dict['input_ids'][0])))
         print(qa_predict)
         print("结束！！！！！！！！！！！！！！！！")
@@ -425,7 +422,6 @@ for epoch in range(epoch_size):  # 所有数据迭代总的次数
             print(e)
             exit(0)
 
-
         total_loss = torch.sqrt(torch.exp(nsp_loss)) * qa_loss  # 目的是为了当nsp预测错了的时候 加大惩罚程度
         # total_loss = torch.sqrt(torch.exp(nsp_loss)) * qa_loss  # 目的是为了当nsp预测错了的时候 加大惩罚程度
 
@@ -454,7 +450,7 @@ for epoch in range(epoch_size):  # 所有数据迭代总的次数
 
     # 每5个epoch保存一次
     if (epoch + 1) % 5 == 0:
-        torch.save(model.state_dict(), 'save_model/nsp_qa_lstm/nsp_qa_lstm_epoch_%d' % (epoch + 1))
+        torch.save(model.state_dict(), 'save_model/nsp_qa_lstm_union/nsp_qa_lstm_epoch_%d' % (epoch + 1))
 
 # 最后保存一下
-torch.save(model.state_dict(), 'save_model/nsp_qa_lstm/nsp_qa_lstm_epoch_%d' % (epoch_size))
+torch.save(model.state_dict(), 'save_model/nsp_qa_lstm_union/nsp_qa_lstm_epoch_%d' % (epoch_size))
