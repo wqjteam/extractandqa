@@ -163,18 +163,18 @@ cmrcdata = cmrcdata.drop(['version', 'data'], axis=1)
 union_qa_data = pd.concat([q_a, cmrcdata], axis=0)
 union_qa_data.to_json('data/origin/intercontest/union_qa_positive_negate.json', force_ascii=False, orient='records',
                       lines=True)
-
 default_df = union_qa_data.copy(deep=True)
 default_df['nsp'] = default_df['q_a'].map(lambda x: 1)
-union_qa_data=union_qa_data.reset_index()
-union_qa_data['new_temp_index'] = union_qa_data.index
+union_qa_data = union_qa_data.reset_index()
 index_size = union_qa_data.index.size
+union_qa_data['new_temp_index'] = union_qa_data.index
 
 
-def match_error_multiple(sentence):
+def match_error_multiple(sentence, index_size):
     # 获取需要去除的index
     current_index = sentence['new_temp_index']
     # 生成所有备选index，移除现在的index，然后在其中随机选择
+
     alternativearray = np.arange(0, index_size).tolist()
     alternativearray.remove(current_index)
     randomindex = random.randrange(len(alternativearray))
@@ -182,14 +182,33 @@ def match_error_multiple(sentence):
     return q_a, 0  # 0的话为false
 
 
-union_qa_data[['q_a', 'nsp']] = union_qa_data.apply(match_error_multiple, axis=1, result_type='expand')
+union_qa_data[['q_a', 'nsp']] = union_qa_data.apply(lambda row: match_error_multiple(row, index_size), axis=1,
+                                                    result_type='expand')
 
-union_qa_error_postivate=pd.concat([default_df,union_qa_data.drop(['index','new_temp_index'],axis=1)],axis=0)
+union_qa_error_postivate = pd.concat([default_df, union_qa_data.drop(['index', 'new_temp_index'], axis=1)], axis=0)
 
-
-union_qa_error_postivate= union_qa_error_postivate.sample(frac=1) #乱序处理
+union_qa_error_postivate = union_qa_error_postivate.sample(frac=1)  # 乱序处理
 # union_qa_error_postivate.to_json('data/origin/intercontest/union_culture_kiwi_qa_error_postivate.json', force_ascii=False,orient='records', lines=True)
-passage_keyword_json = pd.read_json("./data/origin/intercontest/union_culture_kiwi_qa_error_postivate.json", orient='records',
+passage_keyword_json = pd.read_json("./data/origin/intercontest/union_culture_kiwi_qa_error_postivate.json",
+                                    orient='records',
                                     lines=True).head(100)
 
-print(passage_keyword_json.head())
+
+def get_organize_data_bywiki(filepath):
+    cmrcdata = pd.read_json(filepath)
+
+    cmrcdata[['passage', 'q_a']] = cmrcdata.apply(getqa_answer, axis=1, result_type='expand')
+    cmrcdata['q_a'] = cmrcdata['q_a'].map(orgnize_answer)
+    cmrcdata = cmrcdata.drop(['version', 'data'], axis=1)
+    default_df = cmrcdata.copy(deep=True)
+    default_df['nsp'] = default_df['q_a'].map(lambda x: 1)
+    union_qa_data = cmrcdata.reset_index()
+    union_qa_data['new_temp_index'] = union_qa_data.index
+    index_size = union_qa_data.index.size
+    union_qa_data[['q_a', 'nsp']] = union_qa_data.apply(lambda row: match_error_multiple(row, index_size), axis=1,
+                                                        result_type='expand')
+
+    union_qa_error_postivate = pd.concat([default_df, union_qa_data.drop(['index', 'new_temp_index'], axis=1)], axis=0)
+
+    union_qa_error_postivate = union_qa_error_postivate.sample(frac=1)  # 乱序处理
+    return union_qa_error_postivate

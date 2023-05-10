@@ -54,7 +54,7 @@ else:
 '''
 获取数据
 '''
-passage_keyword_json = pd.read_json("./data/origin/intercontest/passage_qa_keyword_union_negate.json", orient='records',
+passage_keyword_json = pd.read_json("./data/origin/intercontest/union_culture_kiwi_qa_error_postivate.json", orient='records',
                                     lines=True).drop("spos", axis=1)
 # passage_keyword_json['q_a'] 和 passage_keyword_json['q_a'].q_a 一样
 passage_keyword_json = passage_keyword_json[passage_keyword_json['q_a'].apply(lambda x: len(x) >= 1)]
@@ -64,8 +64,7 @@ passage_keyword_json = passage_keyword_json[passage_keyword_json['q_a'].apply(la
 # passage_keyword_json = passage_keyword_json[:10]
 passage_keyword_json = passage_keyword_json.explode("q_a").values
 
-sent = ['我爱北京天安门，天安门上太阳升', '我爱北京中南海，毛主席在中南还', '改革开放好，我哎深圳，深圳是改革开放先驱']
-question = ['我爱什么?', '毛主席在哪?', '谁是改革开放先驱']
+
 
 train_data, dev_data = Data.random_split(passage_keyword_json, [int(len(passage_keyword_json) * 0.9),
                                                                 len(passage_keyword_json) - int(
