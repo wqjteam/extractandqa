@@ -225,11 +225,11 @@ train_data=all_data.iloc[:train_size,:]
 dev_data=all_data.iloc[train_size:train_size+dev_size,:]
 test_data=all_data.iloc[train_size+dev_size:,:]
 
-
-train_data.to_json('data/origin/intercontest/union_culture_kiwi_qa_error_postivate_train.json', force_ascii=False,orient='records', lines=True)
-
-
-dev_data.to_json('data/origin/intercontest/union_culture_kiwi_qa_error_postivate_dev.json', force_ascii=False,orient='records', lines=True)
-
-
-test_data.to_json('data/origin/intercontest/union_culture_kiwi_qa_error_postivate_test.json', force_ascii=False,orient='records', lines=True)
+#
+# train_data.to_json('data/origin/intercontest/union_culture_kiwi_qa_error_postivate_train.json', force_ascii=False,orient='records', lines=True)
+#
+#
+# dev_data.to_json('data/origin/intercontest/union_culture_kiwi_qa_error_postivate_dev.json', force_ascii=False,orient='records', lines=True)
+#
+#
+# test_data.to_json('data/origin/intercontest/union_culture_kiwi_qa_error_postivate_test.json', force_ascii=False,orient='records', lines=True)
