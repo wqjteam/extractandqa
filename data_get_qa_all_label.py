@@ -1,4 +1,5 @@
 ﻿# -*- coding: utf-8 -*-
+import math
 import os
 import random
 from collections import OrderedDict
@@ -182,8 +183,8 @@ union_qa_data[['q_a', 'nsp']] = union_qa_data.apply(lambda row: match_error_mult
 
 union_qa_error_postivate = pd.concat([default_df, union_qa_data.drop(['index', 'new_temp_index'], axis=1)], axis=0)
 
-union_qa_error_postivate = union_qa_error_postivate.sample(frac=1)  # 乱序处理
-# union_qa_error_postivate.to_json('data/origin/intercontest/union_culture_kiwi_qa_error_postivate.json', force_ascii=False,orient='records', lines=True)
+# union_qa_error_postivate = union_qa_error_postivate.sample(frac=1)  # 乱序处理
+# union_qa_error_postivate.to_json('data/origin/intercontest/union_culture_kiwi_qa_error_postivate_train.json', force_ascii=False,orient='records', lines=True)
 # passage_keyword_json = pd.read_json("./data/origin/intercontest/union_culture_kiwi_qa_error_postivate.json",
 #                                     orient='records',
 #                                     lines=True).head(100)
@@ -197,13 +198,38 @@ def get_organize_data_bywiki(filepath):
     cmrcdata = cmrcdata.drop(['version', 'data'], axis=1)
     default_df = cmrcdata.copy(deep=True)
     default_df['nsp'] = default_df['q_a'].map(lambda x: 1)
-    union_qa_data = cmrcdata.reset_index()
-    union_qa_data['new_temp_index'] = union_qa_data.index
-    index_size = union_qa_data.index.size
-    union_qa_data[['q_a', 'nsp']] = union_qa_data.apply(lambda row: match_error_multiple(row, index_size,'q_a'), axis=1,
+    cmrcdata = cmrcdata.reset_index()
+    cmrcdata['new_temp_index'] = cmrcdata.index
+    index_size = cmrcdata.index.size
+    cmrcdata[['q_a', 'nsp']] = cmrcdata.apply(lambda row: match_error_multiple(row, index_size,'q_a'), axis=1,
                                                         result_type='expand')
 
-    union_qa_error_postivate = pd.concat([default_df, union_qa_data.drop(['index', 'new_temp_index'], axis=1)], axis=0)
+    union_qa_error_postivate = pd.concat([default_df, cmrcdata.drop(['index', 'new_temp_index'], axis=1)], axis=0)
 
     union_qa_error_postivate = union_qa_error_postivate.sample(frac=1)  # 乱序处理
     return union_qa_error_postivate
+
+dev_data=get_organize_data_bywiki('./data/origin/cmrc/cmrc2018_dev.json')
+test_data=get_organize_data_bywiki('./data/origin/cmrc/cmrc2018_trial.json')
+all_data=pd.concat([union_qa_error_postivate, dev_data,test_data], axis=0).sample(frac=1)
+
+all_data = all_data.reset_index()
+
+
+alldatasize=len(all_data)
+train_size=math.ceil(alldatasize*0.8)
+dev_size=math.ceil(alldatasize*0.1)
+test_size=alldatasize-train_size-dev_size
+
+train_data=all_data.iloc[:train_size,:]
+dev_data=all_data.iloc[train_size:train_size+dev_size,:]
+test_data=all_data.iloc[train_size+dev_size:,:]
+
+
+train_data.to_json('data/origin/intercontest/union_culture_kiwi_qa_error_postivate_train.json', force_ascii=False,orient='records', lines=True)
+
+
+dev_data.to_json('data/origin/intercontest/union_culture_kiwi_qa_error_postivate_dev.json', force_ascii=False,orient='records', lines=True)
+
+
+test_data.to_json('data/origin/intercontest/union_culture_kiwi_qa_error_postivate_test.json', force_ascii=False,orient='records', lines=True)
