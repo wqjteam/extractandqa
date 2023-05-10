@@ -1,5 +1,6 @@
 ﻿# -*- coding: utf-8 -*-
 import os
+import random
 from collections import OrderedDict
 from functools import partial
 
@@ -89,9 +90,10 @@ def create_batch(data):
             returnpassages.append(textstr)
             returnquestion.append(question)
             nsp_labels.append(nsp_label_id.get(True))
-            returnanswer.append({"answer": answer, "start": start_in, "end": start_in + len(answer)})
+            answertuple = {"answer": answer, "start": start_in, "end": start_in + len(answer)}
+            returnanswer.append(answertuple)
             returnseq.append(seqindex)
-            returntuple.append((returnpassages, returnquestion, returnanswer))
+            returntuple.append((textstr, question, answertuple))
 
             # print(textstr[start_in:start_in + len(answer)])
         else:
@@ -101,17 +103,93 @@ def create_batch(data):
             # sep_in = textstr.index(0)
             # start_positions_labels.append(sep_in)
             # end_positions_labels.append(sep_in)
-    return pd.DataFrame(list(returnseq, returntuple))
+
+    return pd.DataFrame({'seq': returnseq, 'data': returntuple})
 
 
 # batch_size 除以2是为了 在后面认为添加了负样本   负样本和正样本是1：1
-q_a = pd.DataFrame(create_batch(passage_keyword_json))
+q_a = create_batch(passage_keyword_json)
 
 
-def collect_list(group):
-    return group
+def collect_list_passage(group):
+    passage = ''
+    q_a = []
+    for data in group:
+        passage = data[0]
+        answer = data[2]
+        q_a.append({'question': data[1],
+                    'answer': {'text': answer.get('answer'), 'start': answer.get('start'), 'end': answer.get('end')}})
+        # print(data)
+    return passage, q_a
 
 
-q_a.groupby(0).agg(collect_list)
-# for (row_index,row_data) in q_a.iterrows():
-#     print(row_data)
+def collect_list_qa(group):
+    q_a = []
+    for data in group:
+        answer = data[2]
+        q_a.append({'question': data[1],
+                    'answer': {'text': answer.get('answer'), 'start': answer.get('start'), 'end': answer.get('end')}})
+        # print(data)
+    return q_a
+
+
+q_a = q_a.groupby('seq').agg({'data': collect_list_passage})
+q_a['passage'] = q_a['data'].map(lambda x: x[0])
+q_a['q_a'] = q_a['data'].map(lambda x: x[1])
+q_a = q_a.drop('data', axis=1)
+
+cmrcdata = pd.read_json('./data/origin/cmrc/cmrc2018_trial.json')
+
+
+def getqa_answer(data):
+    data = data['data']
+    return data.get('paragraphs')[0].get('context'), data.get('paragraphs')[0].get('qas')
+
+
+def orgnize_answer(datas):
+    q_a = []
+    for data in datas:
+        answer = data.get('answers')[0]
+        q_a.append({'question': data.get('question'),
+                    'answer': {'text': answer.get('text'), 'start': answer.get('answer_start'),
+                               'end': answer.get('answer_start') + len(answer.get('text'))}})
+    return q_a
+
+
+cmrcdata[['passage', 'q_a']] = cmrcdata.apply(getqa_answer, axis=1, result_type='expand')
+cmrcdata['q_a'] = cmrcdata['q_a'].map(orgnize_answer)
+cmrcdata = cmrcdata.drop(['version', 'data'], axis=1)
+
+union_qa_data = pd.concat([q_a, cmrcdata], axis=0)
+union_qa_data.to_json('data/origin/intercontest/union_qa_positive_negate.json', force_ascii=False, orient='records',
+                      lines=True)
+
+default_df = union_qa_data.copy(deep=True)
+default_df['nsp'] = default_df['q_a'].map(lambda x: 1)
+union_qa_data=union_qa_data.reset_index()
+union_qa_data['new_temp_index'] = union_qa_data.index
+index_size = union_qa_data.index.size
+
+
+def match_error_multiple(sentence):
+    # 获取需要去除的index
+    current_index = sentence['new_temp_index']
+    # 生成所有备选index，移除现在的index，然后在其中随机选择
+    alternativearray = np.arange(0, index_size).tolist()
+    alternativearray.remove(current_index)
+    randomindex = random.randrange(len(alternativearray))
+    q_a = union_qa_data.iloc[randomindex][1]
+    return q_a, 0  # 0的话为false
+
+
+union_qa_data[['q_a', 'nsp']] = union_qa_data.apply(match_error_multiple, axis=1, result_type='expand')
+
+union_qa_error_postivate=pd.concat([default_df,union_qa_data.drop(['index','new_temp_index'],axis=1)],axis=0)
+
+
+union_qa_error_postivate= union_qa_error_postivate.sample(frac=1) #乱序处理
+# union_qa_error_postivate.to_json('data/origin/intercontest/union_culture_kiwi_qa_error_postivate.json', force_ascii=False,orient='records', lines=True)
+passage_keyword_json = pd.read_json("./data/origin/intercontest/union_culture_kiwi_qa_error_postivate.json", orient='records',
+                                    lines=True).head(100)
+
+print(passage_keyword_json.head())
