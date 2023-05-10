@@ -62,11 +62,11 @@ dev_data = pd.read_json("./data/origin/intercontest/union_culture_kiwi_qa_error_
                         lines=True)
 test_data = pd.read_json("./data/origin/intercontest/union_culture_kiwi_qa_error_postivate_test.json", orient='records',
                          lines=True)
-train_data = train_data[train_data['q_a'].apply(lambda x: len(x) >= 1)]
+train_data = train_data[train_data['nsp'].apply(lambda x: x==0)]
 
 
-# passage_keyword_json = passage_keyword_json[passage_keyword_json.nsp == 1]
-# passage_keyword_json = passage_keyword_json[passage_keyword_json['sentence'].apply(lambda x: '长治市博物馆，' in x)]
+
+train_data = train_data[train_data['passage'].apply(lambda x: x.startswith('J Storm') )]
 # passage_keyword_json = passage_keyword_json[:10]
 
 
@@ -416,9 +416,15 @@ for epoch in range(epoch_size):  # 所有数据迭代总的次数
         '''
         qa loss 计算
         '''
-        start_loss = loss_fct(qa_start_logits, start_positions_labels)
-        end_loss = loss_fct(qa_end_logits, end_positions_labels)
-        qa_loss = (start_loss + end_loss) / 2
+        try:
+            start_loss = loss_fct(qa_start_logits, start_positions_labels)
+            end_loss = loss_fct(qa_end_logits, end_positions_labels)
+            qa_loss = (start_loss + end_loss) / 2
+        except Exception as e:
+            print(tokenizer.convert_ids_to_tokens(mask_input_ids[0]))
+            print(e)
+            exit(0)
+
 
         total_loss = torch.sqrt(torch.exp(nsp_loss)) * qa_loss  # 目的是为了当nsp预测错了的时候 加大惩罚程度
         # total_loss = torch.sqrt(torch.exp(nsp_loss)) * qa_loss  # 目的是为了当nsp预测错了的时候 加大惩罚程度
