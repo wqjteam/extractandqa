@@ -239,7 +239,7 @@ model.to(device)
 '''
 可视化
 '''
-viz = Visdom(env=u'qa_%s_lstm_train' % model_name)
+viz = Visdom(env=u'qa_%s_lstm_train_unionotherdata' % model_name)
 name = ['nsp_loss', 'qa_loss', 'total_loss']
 name_em_f1 = ['em_score', 'f1_score']
 viz.line(Y=[(0., 0., 0.)], X=[(0., 0., 0.)], win="pitcure_1",
