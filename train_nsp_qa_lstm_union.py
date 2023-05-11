@@ -63,10 +63,11 @@ dev_data = pd.read_json("./data/origin/intercontest/union_culture_kiwi_qa_error_
 test_data = pd.read_json("./data/origin/intercontest/union_culture_kiwi_qa_error_postivate_test.json", orient='records',
                          lines=True)
 
+# train_data = train_data[train_data['nsp'].apply(lambda x: x == 1)]
+#
+# train_data = train_data[train_data['passage'].apply(lambda x: x.startswith('J Storm'))]
 
-train_data = train_data[train_data['nsp'].apply(lambda x: x == 1)]
 
-train_data = train_data[train_data['passage'].apply(lambda x: x.startswith('J Storm'))]
 # passage_keyword_json = passage_keyword_json[:10]
 # print(111)
 
@@ -74,17 +75,33 @@ train_data = train_data[train_data['passage'].apply(lambda x: x.startswith('J St
 def tokenize_and_align_labels(data, tokenizer):
     index_list, text, q_a, nsp = zip(*data)  # arrat的四列 转为tuple
     textarray = []
-    for data in text:
-        data=data.lower()
-        if len(data) > 512 - 3 - 30:  # 给问题留30个字
-            textarray.append(list(data[:512 - 3 - 30]))
-        else:
-            textarray.append(list(data))
+
     # text = [list(data) for data in text]  # tuple 转为 list0
     questions = [list(qa.get('question')) for qa in q_a]
     answers = [qa.get('answer').get('text') for qa in q_a]
     token_answers_index = [(qa.get('answer').get('start'), qa.get('answer').get('end')) for qa in q_a]
     nsps = list(nsp)  # tuple 转为list
+
+    """
+    处理大小写、空格与越界导致的对不齐
+    """
+    for index, data in enumerate(text):
+        start_index, end_index = token_answers_index[index]
+        start_decrease = 0
+        end_decrease = 0
+        for i, x in enumerate(data):
+            if x == '' or x == ' ':
+                if i <= start_index:
+                    start_decrease += 1
+                if i <= end_index:
+                    end_decrease += 1
+        token_answers_index[index] = (start_index - start_decrease, end_index - end_decrease)
+        data = [x.lower() for x in data if x != '' and x != ' ']
+
+        if len(data) > 512 - 3 - 30:  # 给问题留30个字
+            textarray.append(list(data[:512 - 3 - 30]))
+        else:
+            textarray.append(list(data))
 
     nsp_labels = []  # 用作判断两句是否相关
     start_positions_labels = []  # 记录起始位置 需要在进行encode之后再进行添加
@@ -125,23 +142,9 @@ def tokenize_and_align_labels(data, tokenizer):
             seqindex = encoded_dict_textandquestion['input_ids'][index].index(102)  # ['SEP']
             token_answers_index[index] = (seqindex, seqindex)
             continue
-        '''
-        去除空格的影响
-        '''
-        if nsps[index]==1:
-            start_decrease=0
-            end_decrease=0
-            for i,x in enumerate(textarray[index]) :
-                if x=='' or  x==' ':
-                    if i<=start_index:
-                        start_decrease+=1
-                    if i<=end_index:
-                        end_decrease+=1
-            start_index=start_index-start_decrease
-            end_index=end_index-end_decrease
-            textarray[index]=[x for x in textarray[index] if x !='' and x!=' ' ]
-            textarray[index]
-            # 遍历subtokens位置索引
+
+
+        # 遍历subtokens位置索引
         for word_index, word_idx in enumerate(word_ids):
             if word_idx is None or word_idx == previous_word_idx:
                 pass
@@ -156,14 +159,14 @@ def tokenize_and_align_labels(data, tokenizer):
                     true_end_index = word_index
             if true_end_index != -1:
                 token_answers_index[index] = (true_start_index, true_end_index)
-                currenttext=''.join(textarray[index])
+                currenttext = ''.join(textarray[index])
 
                 currenttexttoken = ''.join(tokenizer.convert_ids_to_tokens(
                     encoded_dict_textandquestion['input_ids'][index]))
                 currentnsp = nsps[index]
                 currentquestion = questions[index]
                 currentanswer = answers[index]
-                currentanswertext=''.join(textarray[index][ back_start_index: back_end_index])
+                currentanswertext = ''.join(textarray[index][back_start_index: back_end_index])
                 currenttokennanswer = ''.join(tokenizer.convert_ids_to_tokens(
                     encoded_dict_textandquestion['input_ids'][index][true_start_index: true_end_index]))
                 break
@@ -180,9 +183,9 @@ def tokenize_and_align_labels(data, tokenizer):
 train_data = tokenize_and_align_labels(train_data.explode("q_a").values, tokenizer)
 dev_data = tokenize_and_align_labels(dev_data.explode("q_a").values, tokenizer)
 test_data = tokenize_and_align_labels(test_data.explode("q_a").values, tokenizer)
-train_data = train_data[0:2]
-dev_data = dev_data[0:2]
-test_data = test_data[0:2]
+# train_data = train_data[0:2]
+# dev_data = dev_data[0:2]
+# test_data = test_data[0:2]
 nsp_id_label = {1: True, 0: False}
 
 nsp_label_id = {True: 1, False: 0}
@@ -359,7 +362,7 @@ def evaluate(model, eval_data_loader, epoch, tokenizer):
         X=[(epoch + 1, epoch + 1, epoch + 1)], win="pitcure_2", update='append')
     viz.line(Y=[(eval_em_score / eval_step, eval_f1_score / eval_step)],
              X=[(epoch + 1, epoch + 1)], win="pitcure_3", update='append')
-    if eval_em_score / eval_step >= 0:
+    if eval_em_score / eval_step >= 1:
         # if eval_em_score / eval_step >= 0.2:
         encoded_dict = tokenizer.batch_encode_plus(
             batch_text_or_text_pairs=list(
