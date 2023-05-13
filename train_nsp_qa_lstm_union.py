@@ -362,7 +362,7 @@ def evaluate(model, eval_data_loader, epoch, tokenizer):
         X=[(epoch + 1, epoch + 1, epoch + 1)], win="pitcure_2", update='append')
     viz.line(Y=[(eval_em_score / eval_step, eval_f1_score / eval_step)],
              X=[(epoch + 1, epoch + 1)], win="pitcure_3", update='append')
-    if eval_em_score / eval_step >= 88.50:
+    if eval_em_score / eval_step >= 88.70:
         # if eval_em_score / eval_step >= 0.2:
         encoded_dict = tokenizer.batch_encode_plus(
             batch_text_or_text_pairs=list(
