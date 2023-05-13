@@ -283,7 +283,7 @@ viz.line(Y=[(0., 0., 0.)], X=[(0., 0., 0.)], win="pitcure_2",
 viz.line(Y=[(0., 0.)], X=[(0., 0.)], win="pitcure_3",
          opts=dict(title='eval_em_f1', legend=name_em_f1, xlabel='epoch', ylabel='score(100分制)',
                    markers=False))  # 绘制起始位置
-
+print("--------------------Visdom已完成注册---------------")
 
 #  评估函数，用作训练一轮，评估一轮使用
 def evaluate(model, eval_data_loader, epoch, tokenizer):
