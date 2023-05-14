@@ -480,7 +480,7 @@ for epoch in range(epoch_size):  # 所有数据迭代总的次数
              X=[(epoch + 1, epoch + 1, epoch + 1)], win="pitcure_1", update='append')
 
     # 绘制评估函数相关数据
-    evaluate(model=model, eval_data_loader=dev_dataloader, epoch=epoch, tokenizer=tokenizer)
+    evaluate(model=model, eval_data_loader=dev_dataloader, epoch=epoch+1, tokenizer=tokenizer)
 
     # 每5个epoch保存一次
     if (epoch + 1) % 5 == 0:
