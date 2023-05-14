@@ -344,7 +344,7 @@ def evaluate(model, eval_data_loader, epoch, tokenizer):
         f1_score = qa_metric['F1']
 
         print('--eval---epoch次数:%d---em得分: %.6f - f1得分: %.6f--nsp损失函数: %.6f--qa损失函数: %.6f- total损失函数: %.6f'
-              % (epoch, em_score, f1_score, nsp_loss, qa_loss, total_loss.detach()))
+              % (epoch+1, em_score, f1_score, nsp_loss, qa_loss, total_loss.detach()))
         # 损失函数的平均值
         # 按照概率最大原则，计算单字的标签编号
         # argmax计算logits中最大元素值的索引，从0开始
@@ -480,7 +480,7 @@ for epoch in range(epoch_size):  # 所有数据迭代总的次数
              X=[(epoch + 1, epoch + 1, epoch + 1)], win="pitcure_1", update='append')
 
     # 绘制评估函数相关数据
-    evaluate(model=model, eval_data_loader=dev_dataloader, epoch=epoch+1, tokenizer=tokenizer)
+    evaluate(model=model, eval_data_loader=dev_dataloader, epoch=epoch, tokenizer=tokenizer)
 
     # 每5个epoch保存一次
     if (epoch + 1) % 5 == 0:
