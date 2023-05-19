@@ -20,7 +20,7 @@ import data_get_qa_all_label
 from PraticeOfTransformers import Utils
 from PraticeOfTransformers.CustomModelForNSPQABILSTM import CustomModelForNSPQABILSTM
 
-model_name = 'nghuyong/ernie-2.0-base-en'
+model_name = 'nghuyong/ernie-3.0-base-zh'
 tokenizer = AutoTokenizer.from_pretrained(model_name)
 
 os.environ['CUDA_VISIBLE_DEVICES'] = '0,1'  # 指定GPU编号 多gpu训练
@@ -125,7 +125,8 @@ def tokenize_and_align_labels(data, tokenizer):
         如果nsp是0的话，代表代表没有答案
         '''
         if nsps[index] == 0 or start_index > passage_len or end_index > passage_len:
-            seqindex = encoded_dict_textandquestion['input_ids'][index].index(102)  # ['SEP']
+            stpid=tokenizer.convert_tokens_to_ids('[SEP]')
+            seqindex = encoded_dict_textandquestion['input_ids'][index].index(stpid)  # ['SEP']
             token_answers_index[index] = (seqindex, seqindex)
             continue
 
@@ -171,7 +172,7 @@ train_data, dev_data = Data.random_split(origin_data, [int(len(origin_data) * 0.
                                                        len(origin_data) - int(
                                                            len(origin_data) * 0.9)],
                                          generator=torch.Generator().manual_seed(0))
-# train_data = train_data[0:2]
+# train_data = train_data.dataset[0:2]
 # dev_data = dev_data[0:2]
 # test_data = test_data[0:2]
 nsp_id_label = {1: True, 0: False}
@@ -220,15 +221,16 @@ if torch.cuda.device_count() > 1:
     model = nn.DataParallel(model, device_ids=device_ids)
 
 model.to(device)
+model_name = model_name.split("/")[1]
 '''
 可视化
 '''
-viz = Visdom(env=u'qa_%s_lstm_train_unionotherdata' % model_name)
+viz = Visdom(env=u'qa_%s_train' % (model_name))
 name = ['nsp_loss', 'qa_loss', 'total_loss']
 name_em_f1 = ['em_score', 'f1_score']
-viz.line(Y=[(0., 0., 0.)], X=[(0., 0., 0.)], win="pitcure_1",
+viz.line(Y=[0.], X=[0.], win="pitcure_1",
          opts=dict(title='train_loss', legend=name, xlabel='epoch', ylabel='loss', markers=False))  # 绘制起始位置 #win指的是图形id
-viz.line(Y=[(0., 0., 0.)], X=[(0., 0., 0.)], win="pitcure_2",
+viz.line(Y=[0.], X=[0.], win="pitcure_2",
          opts=dict(title='eval_loss', legend=name, xlabel='epoch', ylabel='loss', markers=False))  # 绘制起始位置
 viz.line(Y=[(0., 0.)], X=[(0., 0.)], win="pitcure_3",
          opts=dict(title='eval_em_f1', legend=name_em_f1, xlabel='epoch', ylabel='score(100分制)',
@@ -238,8 +240,6 @@ print("--------------------Visdom已完成注册---------------")
 
 #  评估函数，用作训练一轮，评估一轮使用
 def evaluate(model, eval_data_loader, epoch, tokenizer):
-    eval_nsp_loss = 0
-    eval_qa_loss = 0
     eval_total_loss = 0
     eval_em_score = 0
     eval_f1_score = 0
@@ -249,7 +249,9 @@ def evaluate(model, eval_data_loader, epoch, tokenizer):
         mask_input_ids, attention_masks, token_type_ids, nsp_labels, start_positions_labels, end_positions_labels = return_batch_data
         with torch.no_grad():
             model_output = model(input_ids=mask_input_ids.to(device), attention_mask=attention_masks.to(device),
-                                 token_type_ids=token_type_ids.to(device))
+                                 token_type_ids=token_type_ids.to(device),
+                                 start_positions=start_positions_labels.to(device),
+                                 end_positions=end_positions_labels.to(device))
 
         # 进行转换
         if torch.cuda.is_available() and torch.cuda.device_count() > 1:
@@ -257,30 +259,10 @@ def evaluate(model, eval_data_loader, epoch, tokenizer):
         else:
             model_config = model.config
 
-        nsp_relationship_scores = model_output.nsp_relationship_scores.to("cpu")
-        qa_start_logits = model_output.qa_start_logits.to("cpu")
-        qa_end_logits = model_output.qa_end_logits.to("cpu")
-
-        '''
-        loss的计算
-        '''
-        loss_fct = CrossEntropyLoss()  # -100 index = padding token 默认就是-100
-
-        '''
-        nsp loss 计算
-        '''
-        nsp_loss = loss_fct(nsp_relationship_scores.view(-1, 2), nsp_labels.view(-1))
-
-        '''
-        qa loss 计算
-        '''
-        start_loss = loss_fct(qa_start_logits, start_positions_labels)
-        end_loss = loss_fct(qa_end_logits, end_positions_labels)
-        qa_loss = (start_loss + end_loss) / 2
-
-        total_loss = torch.sqrt(torch.exp(nsp_loss)) * qa_loss  # 目的是为了当nsp预测错了的时候 加大惩罚程度
-        # total_loss = torch.sqrt(torch.exp(nsp_loss)) * qa_loss  # 目的是为了当nsp预测错了的时候 加大惩罚程度
-
+        loss = model_output.loss.to("cpu")
+        qa_start_logits = model_output.start_logits.to("cpu")
+        qa_end_logits = model_output.end_logits.to("cpu")
+        eval_total_loss += loss
         '''
         实际预测值与目标值的
         '''
@@ -293,27 +275,21 @@ def evaluate(model, eval_data_loader, epoch, tokenizer):
         qa_metric = Utils.get_eval(pred_arr=qa_predict, target_arr=qa_target)
         em_score = qa_metric['EM']
         f1_score = qa_metric['F1']
+        eval_em_score += em_score
+        eval_f1_score += f1_score
 
-        print('--eval---epoch次数:%d---em得分: %.6f - f1得分: %.6f--nsp损失函数: %.6f--qa损失函数: %.6f- total损失函数: %.6f'
-              % (epoch + 1, em_score, f1_score, nsp_loss, qa_loss, total_loss.detach()))
+        print('--eval---epoch次数:%d---em得分: %.6f - f1得分: %.6f-- total损失函数: %.6f'
+              % (epoch + 1, em_score, f1_score, eval_total_loss.detach()))
         # 损失函数的平均值
         # 按照概率最大原则，计算单字的标签编号
         # argmax计算logits中最大元素值的索引，从0开始
         # 进行统计展示
         eval_step += 1
 
-        eval_nsp_loss += nsp_loss.detach()
-        eval_qa_loss += qa_loss.detach()
-        eval_total_loss += total_loss.detach()
-        eval_em_score += em_score
-        eval_f1_score += f1_score
-
-    viz.line(Y=[
-        (eval_nsp_loss / eval_step, eval_qa_loss / eval_step, eval_total_loss / eval_step)],
-        X=[(epoch + 1, epoch + 1, epoch + 1)], win="pitcure_2", update='append')
+    viz.line(Y=[eval_total_loss / eval_step], X=[epoch + 1], win="pitcure_2", update='append')
     viz.line(Y=[(eval_em_score / eval_step, eval_f1_score / eval_step)],
              X=[(epoch + 1, epoch + 1)], win="pitcure_3", update='append')
-    if eval_em_score / eval_step >= 88.70:
+    if eval_em_score / eval_step >= 100.70:
         # if eval_em_score / eval_step >= 0.2:
         encoded_dict = tokenizer.batch_encode_plus(
             batch_text_or_text_pairs=list(
@@ -328,8 +304,8 @@ def evaluate(model, eval_data_loader, epoch, tokenizer):
         model_output = model(input_ids=torch.tensor(encoded_dict['input_ids']).to(device),
                              attention_mask=torch.tensor(encoded_dict['attention_mask']).to(device),
                              token_type_ids=torch.tensor(encoded_dict['token_type_ids']).to(device))
-        qa_start_logits = model_output.qa_start_logits.to("cpu")
-        qa_end_logits = model_output.qa_end_logits.to("cpu")
+        qa_start_logits = model_output.start_logits.to("cpu")
+        qa_end_logits = model_output.end_logits.to("cpu")
         inputlen = len(tokenizer.convert_ids_to_tokens(encoded_dict['input_ids'][0]))
         rownames = [str(index) + '-' + data for index, data in
                     enumerate(tokenizer.convert_ids_to_tokens(encoded_dict['input_ids'][0]))]
@@ -355,7 +331,7 @@ def evaluate(model, eval_data_loader, epoch, tokenizer):
             Utils.get_all_word(tokenizer, torch.tensor(encoded_dict['input_ids'])[index, start:end].numpy().tolist())
             for
             index, (start, end) in enumerate(zip(qa_start_logits_argmax, qa_end_logits_argmax))]
-        torch.save(model.state_dict(), 'save_model/nsp_qa_lstm_union/ultimate_nsp_qa_lstm_epoch_%d' % (epoch_size))
+        torch.save(model.state_dict(), 'save_model/qa_%s/ultimate_qa_epoch_%d' % (epoch_size))
         print(''.join(tokenizer.convert_ids_to_tokens(encoded_dict['input_ids'][0])))
         print(qa_predict)
         print("结束！！！！！！！！！！！！！！！！")
@@ -375,68 +351,36 @@ for epoch in range(epoch_size):  # 所有数据迭代总的次数
         mask_input_ids, attention_masks, token_type_ids, nsp_labels, start_positions_labels, end_positions_labels = return_batch_data
 
         model_output = model(input_ids=mask_input_ids.to(device), attention_mask=attention_masks.to(device),
-                             token_type_ids=token_type_ids.to(device), start_positions=start_positions_labels,
-                             end_positions=end_positions_labels)
+                             token_type_ids=token_type_ids.to(device),
+                             start_positions=start_positions_labels.to(device),
+                             end_positions=end_positions_labels.to(device))
         if torch.cuda.is_available() and torch.cuda.device_count() > 1:
             model_config = model.module.config
         else:
             model_config = model.config
 
-        nsp_relationship_scores = model_output.nsp_relationship_scores.to("cpu")
-        qa_start_logits = model_output.qa_start_logits.to("cpu")
-        qa_end_logits = model_output.qa_end_logits.to("cpu")
-
-        '''
-        loss的计算
-        '''
-        loss_fct = CrossEntropyLoss()  # -100 index = padding token 默认就是-100
-
-        '''
-        nsp loss 计算
-        '''
-        nsp_loss = loss_fct(nsp_relationship_scores.view(-1, 2), nsp_labels.view(-1))
-
-        '''
-        qa loss 计算
-        '''
-        try:
-            start_loss = loss_fct(qa_start_logits, start_positions_labels)
-            end_loss = loss_fct(qa_end_logits, end_positions_labels)
-            qa_loss = (start_loss + end_loss) / 2
-        except Exception as e:
-            print(tokenizer.convert_ids_to_tokens(mask_input_ids[0]))
-            print(e)
-            exit(0)
-
-        total_loss = torch.sqrt(torch.exp(nsp_loss)) * qa_loss  # 目的是为了当nsp预测错了的时候 加大惩罚程度
-        # total_loss = torch.sqrt(torch.exp(nsp_loss)) * qa_loss  # 目的是为了当nsp预测错了的时候 加大惩罚程度
-
-        # 进行统计展示
-        epoch_step += 1
-
-        epoch_nsp_loss += nsp_loss.detach()
-        epoch_qa_loss += qa_loss.detach()
-        epoch_total_loss += total_loss.detach()
+        loss = model_output.loss.to("cpu")
+        qa_start_logits = model_output.start_logits.to("cpu")
+        qa_end_logits = model_output.end_logits.to("cpu")
+        epoch_nsp_loss += loss
 
         optim.zero_grad()  # 每次计算的时候需要把上次计算的梯度设置为0
 
-        print('第%d个epoch的%d批数据的loss：%f' % (epoch + 1, step + 1, total_loss))
-        total_loss.backward()  # 反向传播
+        print('第%d个epoch的%d批数据的loss：%f' % (epoch + 1, step + 1, loss))
+        loss.backward()  # 反向传播
 
         optim.step()  # 用来更新参数，也就是的w和b的参数更新操作
         scheduler.step()  # warm_up
     # numpy不可以直接在有梯度的数据上获取，需要先去除梯度
     # 绘制epoch以及对应的测试集损失loss 第一个参数是y  第二个是x
-    viz.line(Y=[(epoch_nsp_loss / epoch_step, epoch_qa_loss / epoch_step,
-                 epoch_total_loss / epoch_step)],
-             X=[(epoch + 1, epoch + 1, epoch + 1)], win="pitcure_1", update='append')
+    viz.line(Y=[epoch_nsp_loss.detach() / epoch_step + 1], X=[epoch + 1], win="pitcure_1", update='append')
 
     # 绘制评估函数相关数据
     evaluate(model=model, eval_data_loader=dev_dataloader, epoch=epoch, tokenizer=tokenizer)
 
     # 每5个epoch保存一次
     if (epoch + 1) % 5 == 0:
-        torch.save(model.state_dict(), 'save_model/nsp_qa_lstm_union/nsp_qa_lstm_epoch_%d' % (epoch + 1))
+        torch.save(model.state_dict(), 'save_model/qa_%s/qa_epoch_%d' % (model_name, epoch + 1))
 
 # 最后保存一下
-torch.save(model.state_dict(), 'save_model/nsp_qa_lstm_union/nsp_qa_lstm_epoch_%d' % (epoch_size))
+torch.save(model.state_dict(), 'save_model/qa_%s/qa_epoch_all_epoch_%d' % (model_name, epoch_size))
