@@ -12,7 +12,7 @@ from torch import nn
 from torch.nn import CrossEntropyLoss
 from torch.optim import AdamW
 from transformers import AutoTokenizer, AutoConfig, get_cosine_schedule_with_warmup, AutoModel, \
-    AutoModelForQuestionAnswering, ErnieForQuestionAnswering
+    AutoModelForQuestionAnswering, ErnieForQuestionAnswering, AlbertForQuestionAnswering
 from visdom import Visdom
 
 import CommonUtil
@@ -20,7 +20,7 @@ import data_get_qa_all_label
 from PraticeOfTransformers import Utils
 from PraticeOfTransformers.CustomModelForNSPQABILSTM import CustomModelForNSPQABILSTM
 
-model_name = 'nghuyong/ernie-3.0-base-zh'
+model_name = 'uer/chinese_roberta_L-12_H-768'
 tokenizer = AutoTokenizer.from_pretrained(model_name)
 
 os.environ['CUDA_VISIBLE_DEVICES'] = '0,1'  # 指定GPU编号 多gpu训练
