@@ -20,7 +20,7 @@ import data_get_qa_all_label
 from PraticeOfTransformers import Utils
 from PraticeOfTransformers.CustomModelForNSPQABILSTM import CustomModelForNSPQABILSTM
 
-model_name = 'SpanBERT/spanbert-large-cased'
+model_name = 'SpanBERT/spanbert-base-cased'
 tokenizer = AutoTokenizer.from_pretrained(model_name)
 
 os.environ['CUDA_VISIBLE_DEVICES'] = '0,1'  # 指定GPU编号 多gpu训练
