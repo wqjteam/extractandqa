@@ -226,6 +226,7 @@ model_name = model_name.split("/")[1]
 可视化
 '''
 viz = Visdom(env=u'qa_%s_train' % (model_name),server='http://127.0.0.1', port='6006')
+viz = Visdom(env='main_1',server='http://127.0.0.1', port='6006')
 name = ['nsp_loss', 'qa_loss', 'total_loss']
 name_em_f1 = ['em_score', 'f1_score']
 viz.line(Y=[0.], X=[0.], win="pitcure_1",
