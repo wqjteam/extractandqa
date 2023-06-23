@@ -342,8 +342,8 @@ def evaluate(model, eval_data_loader, epoch, tokenizer):
 model.train()
 for epoch in range(epoch_size):  # 所有数据迭代总的次数
 
-    epoch_nsp_loss = 0
-    epoch_qa_loss = 0
+
+
     epoch_total_loss = 0
     epoch_step = 0
     for step, return_batch_data in enumerate(train_dataloader):  # 一个batch一个bach的训练完所有数据
@@ -362,7 +362,7 @@ for epoch in range(epoch_size):  # 所有数据迭代总的次数
         loss = model_output.loss.to("cpu")
         qa_start_logits = model_output.start_logits.to("cpu")
         qa_end_logits = model_output.end_logits.to("cpu")
-        epoch_nsp_loss += loss
+        epoch_total_loss += loss
 
         optim.zero_grad()  # 每次计算的时候需要把上次计算的梯度设置为0
 
@@ -373,7 +373,7 @@ for epoch in range(epoch_size):  # 所有数据迭代总的次数
         scheduler.step()  # warm_up
     # numpy不可以直接在有梯度的数据上获取，需要先去除梯度
     # 绘制epoch以及对应的测试集损失loss 第一个参数是y  第二个是x
-    viz.line(Y=[epoch_nsp_loss.detach() / epoch_step + 1], X=[epoch + 1], win="pitcure_1", update='append')
+    viz.line(Y=[epoch_total_loss.detach() / epoch_step + 1], X=[epoch + 1], win="pitcure_1", update='append')
 
     # 绘制评估函数相关数据
     evaluate(model=model, eval_data_loader=dev_dataloader, epoch=epoch, tokenizer=tokenizer)
